@@ -1,0 +1,49 @@
+# Flutter / Dart
+**/build/
+**/.dart_tool/
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+**/.packages
+**/.pub-cache/
+**/.pub/
+**/pubspec.lock
+!**/packages/**/pubspec.lock
+
+# IDE
+**/.idea/
+**/*.iml
+**/.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Android
+**/local.properties
+**/.gradle/
+**/captures/
+**/key.properties
+**/*.jks
+**/*.keystore
+
+# iOS / macOS
+**/Pods/
+**/DerivedData/
+**/Flutter/ephemeral/
+**/Flutter/Generated.xcconfig
+**/Flutter/flutter_export_environment.sh
+**/ServiceDefinitions.json
+**/Runner/GeneratedPluginRegistrant.*
+
+# Coverage / misc
+coverage/
+*.log
+*.tmp
+.emulator_console_auth_token
+
+# Agent runtime noise (keep source docs if needed)
+.agents/**/tmp/
+.agents/**/*.lock

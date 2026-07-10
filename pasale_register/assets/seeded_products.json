@@ -1,0 +1,82 @@
+[
+  {
+    "id": "9772785855724",
+    "name": "Bhatbhateni Premium Basmati Rice 5kg",
+    "barcode": "9772785855724",
+    "sellingPrice": 1150.0,
+    "costPrice": 1000.0,
+    "markup": 15.0
+  },
+  {
+    "id": "9773015984030",
+    "name": "Bhatbhateni Pure Mustard Oil 1L",
+    "barcode": "9773015984030",
+    "sellingPrice": 230.0,
+    "costPrice": 200.0,
+    "markup": 15.0
+  },
+  {
+    "id": "9773033458766",
+    "name": "Bhatbhateni Organic Ghee 1kg",
+    "barcode": "9773033458766",
+    "sellingPrice": 920.0,
+    "costPrice": 800.0,
+    "markup": 15.0
+  },
+  {
+    "id": "9774870343161",
+    "name": "Bhatbhateni CTC Tea 500g",
+    "barcode": "9774870343161",
+    "sellingPrice": 345.0,
+    "costPrice": 300.0,
+    "markup": 15.0
+  },
+  {
+    "id": "9779211501194",
+    "name": "Bhatbhateni Salted Cashews 200g",
+    "barcode": "9779211501194",
+    "sellingPrice": 460.0,
+    "costPrice": 400.0,
+    "markup": 15.0
+  },
+  {
+    "id": "9771209683622",
+    "name": "Daraz Brand Premium Green Tea",
+    "barcode": "9771209683622",
+    "sellingPrice": 575.0,
+    "costPrice": 500.0,
+    "markup": 15.0
+  },
+  {
+    "id": "9776924630807",
+    "name": "Daraz Brand Himalayan Pink Salt 1kg",
+    "barcode": "9776924630807",
+    "sellingPrice": 115.0,
+    "costPrice": 100.0,
+    "markup": 15.0
+  },
+  {
+    "id": "9772344566092",
+    "name": "Daraz Brand Premium Almonds 250g",
+    "barcode": "9772344566092",
+    "sellingPrice": 805.0,
+    "costPrice": 700.0,
+    "markup": 15.0
+  },
+  {
+    "id": "9775370979959",
+    "name": "Daraz Brand Organic Honey 500g",
+    "barcode": "9775370979959",
+    "sellingPrice": 690.0,
+    "costPrice": 600.0,
+    "markup": 15.0
+  },
+  {
+    "id": "9773245741526",
+    "name": "Daraz Brand Pure Cow Ghee 1L",
+    "barcode": "9773245741526",
+    "sellingPrice": 1380.0,
+    "costPrice": 1200.0,
+    "markup": 15.0
+  }
+]
