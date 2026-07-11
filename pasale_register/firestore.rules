@@ -1,0 +1,81 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // DEV: open access so phone + laptop can develop without Auth yet.
+    // Replace with Firebase Auth + store membership before production.
+    function isDevOpen() {
+      return true;
+    }
+
+    function isNonEmptyString(v) {
+      return v is string && v.size() > 0;
+    }
+
+    function isNonNegNumber(v) {
+      return v is number && v >= 0;
+    }
+
+    // ----- Global seed / legacy catalog -----
+    match /products/{productId} {
+      allow read: if isDevOpen();
+      allow create, update: if isDevOpen()
+        && isNonEmptyString(request.resource.data.name)
+        && isNonEmptyString(request.resource.data.barcode)
+        && isNonNegNumber(request.resource.data.sellingPrice)
+        && isNonNegNumber(request.resource.data.costPrice)
+        && isNonNegNumber(request.resource.data.markup);
+      allow delete: if isDevOpen();
+    }
+
+    // ----- Per-store tree -----
+    match /stores/{storeId} {
+      allow read: if isDevOpen();
+      allow create, update: if isDevOpen()
+        && isNonEmptyString(request.resource.data.name)
+        && isNonEmptyString(request.resource.data.storeId);
+      allow delete: if isDevOpen();
+
+      match /devices/{deviceId} {
+        allow read: if isDevOpen();
+        allow write: if isDevOpen()
+          && isNonEmptyString(request.resource.data.deviceId)
+          && isNonEmptyString(request.resource.data.model);
+      }
+
+      // Store-specific products (prices + photos differ by store)
+      match /products/{productId} {
+        allow read: if isDevOpen();
+        allow create, update: if isDevOpen()
+          && isNonEmptyString(request.resource.data.name)
+          && isNonEmptyString(request.resource.data.barcode)
+          && isNonNegNumber(request.resource.data.sellingPrice)
+          && isNonNegNumber(request.resource.data.costPrice)
+          && isNonNegNumber(request.resource.data.markup);
+        allow delete: if isDevOpen();
+      }
+
+      match /settings/{docId} {
+        allow read: if isDevOpen();
+        // cameraScope: tier + enabled[] capabilities
+        allow write: if isDevOpen()
+          && (docId != 'cameraScope'
+              || (request.resource.data.keys().hasAll(['tier', 'enabled'])
+                  && request.resource.data.tier in ['free', 'premium']
+                  && request.resource.data.enabled is list));
+      }
+
+      // Completed checkouts (optional persist from app later)
+      match /sales/{saleId} {
+        allow read: if isDevOpen();
+        allow create: if isDevOpen()
+          && request.resource.data.keys().hasAll([
+               'saleId', 'storeId', 'totalPrice', 'isPaid', 'items', 'createdAt'
+             ])
+          && request.resource.data.items is list
+          && isNonNegNumber(request.resource.data.totalPrice);
+        allow update, delete: if isDevOpen();
+      }
+    }
+  }
+}

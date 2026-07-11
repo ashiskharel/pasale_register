@@ -1,124 +1,159 @@
-# Firebase + real camera setup
+# Firebase + Firestore setup (Pasale Register)
 
-## What the app does today
-
-| Mode | When | Camera | Catalog / scope |
-|------|------|--------|------------------|
-| **Production** | Firebase configured (`isConfigured = true`) | Real ML Kit | Real Firestore |
-| **Real camera (default fallback)** | No Firebase yet | Real ML Kit | Fake local seed data |
-| **Fakes** | `--dart-define=USE_FAKES=true` | Fake | Fake |
-
-On phone, with **no** Firebase project yet, `flutter run` already uses **real barcode/QR camera** and a local catalog.
+Full field reference: **[docs/FIRESTORE_SCHEMA.md](docs/FIRESTORE_SCHEMA.md)**
 
 ---
 
-## One-time Firebase project (full production)
+## Status of this machine
 
-### 1. Install tools
+- Firebase CLI is installed (`firebase --version`)
+- You may be logged in (`firebase login:list`)
+- `firebase projects:list` sometimes fails (API/network); create/select project in the **Console** instead
+
+---
+
+## 1. Create project in Console
+
+1. Open [Firebase Console](https://console.firebase.google.com/)
+2. **Add project** → name e.g. `pasale-register`
+3. Disable Google Analytics if you want (optional)
+4. **Build → Firestore Database → Create database**
+   - Start in **production mode** (we deploy rules next) or test mode for 30 days
+   - Pick a region (e.g. `asia-south1`)
+5. **Build → Storage → Get started** (optional, for product photos later)
+6. **Project settings → Your apps → Add app → Android**
+   - Package name: **`com.example.pasale_register`**
+   - Download `google-services.json` (FlutterFire can also generate this)
+
+---
+
+## 2. Link Flutter app (FlutterFire)
 
 ```powershell
-npm install -g firebase-tools
+cd "C:\Users\aerok\Pasale Register-grok\pasale_register"
+
+$env:Path = "$env:APPDATA\npm;$env:LOCALAPPDATA\Pub\Cache\bin;$env:Path"
+firebase login   # if needed
+firebase use YOUR_PROJECT_ID
+
 dart pub global activate flutterfire_cli
-# ensure Pub bin is on PATH:
-# %LOCALAPPDATA%\Pub\Cache\bin
+flutterfire configure --project=YOUR_PROJECT_ID --platforms=android
 ```
 
-### 2. Login and create/select project
+This writes real:
 
-```powershell
-firebase login
-firebase projects:list
-```
-
-In [Firebase Console](https://console.firebase.google.com/):
-
-1. Create project (e.g. `pasale-register`)
-2. Enable **Cloud Firestore** (test mode for dev is fine)
-3. Add Android app with package name: **`com.example.pasale_register`**
-
-### 3. Configure Flutter
-
-From this folder (`pasale_register`):
-
-```powershell
-cd "C:\Users\aerok\Pasale Register-grok\pasale_register"
-flutterfire configure --project=YOUR_PROJECT_ID --platforms=android,ios
-```
-
-This overwrites:
-
-- `lib/firebase_options.dart` (sets real keys; set `isConfigured` if using our stub style — FlutterFire’s file is used as-is and we treat it as configured when you set the flag or replace the file)
+- `lib/firebase_options.dart`
 - `android/app/google-services.json`
-- optionally `ios/Runner/GoogleService-Info.plist`
 
-After FlutterFire generates `firebase_options.dart`, either:
+Our bootstrap treats options as configured when `projectId` / `apiKey` are not placeholders.
 
-- Use the generated file **as-is**, and update `lib/bootstrap.dart` to always try init when options exist, **or**
-- In our stub, set `DefaultFirebaseOptions.isConfigured = true` and paste real values.
+Then:
 
-**Easiest path after `flutterfire configure`:** replace our stub entirely with the generated file, then set in `bootstrap.dart`:
-
-```dart
-// Always try Firebase when not USE_FAKES / REAL_CAMERA_ONLY
+```powershell
+flutter clean
+flutter pub get
+flutter run
 ```
 
-Our bootstrap already tries `DefaultFirebaseOptions.isConfigured`.  
-If FlutterFire overwrites the file **without** `isConfigured`, add:
+Banner should show: **Firebase · real camera**
 
-```dart
-static const bool isConfigured = true;
-```
+---
 
-to the generated class (or we detect valid non-placeholder projectId).
-
-### 4. Firestore rules (dev)
-
-```
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    match /{document=**} {
-      allow read, write: if true; // DEV ONLY
-    }
-  }
-}
-```
-
-Collections used:
-
-- `stores/{storeId}`
-- `stores/{storeId}/devices/{deviceId}`
-- `stores/{storeId}/settings/cameraScope`
-- `products/{productId}`
-
-### 5. Run on phone
+## 3. Deploy rules + indexes
 
 ```powershell
 cd "C:\Users\aerok\Pasale Register-grok\pasale_register"
-flutter run
+firebase use YOUR_PROJECT_ID
+.\scripts\deploy_firestore.ps1
+# or:
+# firebase deploy --only firestore:rules,firestore:indexes,storage
 ```
 
-Banner should say **Firebase · real camera**.
+Files:
+
+| File | Role |
+|------|------|
+| `firestore.rules` | Field checks for stores, products, devices, cameraScope, sales |
+| `firestore.indexes.json` | Composite indexes for products/sales |
+| `storage.rules` | Product/invoice image paths |
+| `firebase.json` | Wire-up for deploy + emulators |
 
 ---
 
-## Real camera only (no Firebase yet)
+## 4. Collections & fields (summary)
 
-Already the default fallback:
-
-```powershell
-flutter run
-# or force:
-flutter run --dart-define=REAL_CAMERA_ONLY=true
 ```
+stores/{storeId}
+  storeId, name, activationDate, isActive, planTier, currency, createdAt, updatedAt
+  devices/{deviceId}
+    deviceId, model, osVersion, lastActive, platform?, appVersion?, createdAt, updatedAt
+  products/{barcode}
+    id, name, barcode, sellingPrice, costPrice, markup, storeId,
+    imagePath?, imageUrl?, isActive, unit?, notes?, createdAt, updatedAt
+  settings/cameraScope
+    tier, enabled[], updatedBy?, updatedAt, notes?
+  sales/{saleId}   (optional history)
+    saleId, storeId, totalPrice, isPaid, items[], customerPhone?, deviceId?, status, createdAt
+
+products/{barcode}   # global seed fallback (same product fields)
+```
+
+See **docs/FIRESTORE_SCHEMA.md** for full tables + examples.
 
 ---
 
-## Tests (fakes)
+## 5. Seed sample data (Console)
+
+### Option A — Manual documents
+
+Create store `demo-store-01` using fields in `docs/sample_store_tree.json`.
+
+### Option B — Import JSON (Emulator or tools)
+
+- Global seeds: `docs/sample_seed_products.json` → collection `products`
+- Store tree sample: `docs/sample_store_tree.json`
+
+### Option C — App path
+
+1. Activate a store in the app (writes `stores/{id}` + device + default cameraScope)
+2. Scan unknown barcode → register with price + photo (writes `stores/{id}/products/{code}`)
+3. Cam Scope → save (writes `settings/cameraScope`)
+
+---
+
+## 6. Emulator (optional, offline)
 
 ```powershell
-flutter test --dart-define=USE_FAKES=true
-# or tests that call setupLocator(backend: ServiceBackend.fakes)
+firebase emulators:start --only firestore
 ```
 
-Unit tests still call `setupLocator(useFakes: true)` via the legacy helper / explicit fakes.
+UI: http://localhost:4000  
+
+Point the app at emulators later with:
+
+```dart
+FirebaseFirestore.instance.useFirestoreEmulator('localhost', 8080);
+```
+
+(Not enabled by default on device — use physical Firebase project for phone tests.)
+
+---
+
+## 7. Verify from the app
+
+| Action | Expect in Console |
+|--------|-------------------|
+| Activate store | `stores/{id}` with name + dates |
+| Same session | `stores/{id}/devices/{deviceId}` |
+| Save product / unknown scan | `stores/{id}/products/{barcode}` |
+| Cam Scope save | `stores/{id}/settings/cameraScope` |
+| Catalog list | Snapshot of store products |
+
+---
+
+## 8. Production hardening (later)
+
+- Replace open rules with **Firebase Auth** + store membership
+- Upload product photos to Storage → set `imageUrl`
+- Persist checkout to `sales/{saleId}`
+- Restrict superadmin Cam Scope by custom claims

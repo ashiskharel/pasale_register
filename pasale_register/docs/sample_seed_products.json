@@ -1,0 +1,34 @@
+{
+  "products": {
+    "9772785855724": {
+      "id": "9772785855724",
+      "name": "Bhatbhateni Premium Basmati Rice 5kg",
+      "barcode": "9772785855724",
+      "sellingPrice": 1150,
+      "costPrice": 1000,
+      "markup": 15,
+      "isActive": true,
+      "unit": "bag"
+    },
+    "9773015984030": {
+      "id": "9773015984030",
+      "name": "Bhatbhateni Pure Mustard Oil 1L",
+      "barcode": "9773015984030",
+      "sellingPrice": 230,
+      "costPrice": 200,
+      "markup": 15,
+      "isActive": true,
+      "unit": "bottle"
+    },
+    "9771209683622": {
+      "id": "9771209683622",
+      "name": "Sample CTC Tea 500g",
+      "barcode": "9771209683622",
+      "sellingPrice": 320,
+      "costPrice": 280,
+      "markup": 14.29,
+      "isActive": true,
+      "unit": "pack"
+    }
+  }
+}

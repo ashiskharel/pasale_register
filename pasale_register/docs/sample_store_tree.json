@@ -1,0 +1,45 @@
+{
+  "stores": {
+    "demo-store-01": {
+      "storeId": "demo-store-01",
+      "name": "Demo Pasale Shop",
+      "activationDate": "2026-07-11T00:00:00.000Z",
+      "isActive": true,
+      "planTier": "free",
+      "currency": "NPR",
+      "devices": {
+        "demo-device-01": {
+          "deviceId": "demo-device-01",
+          "model": "Android Emulator",
+          "osVersion": "Android 14",
+          "lastActive": "2026-07-11T00:00:00.000Z",
+          "platform": "android"
+        }
+      },
+      "settings": {
+        "cameraScope": {
+          "tier": "free",
+          "enabled": ["barcodeQr"],
+          "updatedBy": "system",
+          "updatedAt": "2026-07-11T00:00:00.000Z",
+          "notes": "Free tier default — barcode & QR"
+        }
+      },
+      "products": {
+        "8901234567890": {
+          "id": "8901234567890",
+          "name": "Demo Instant Noodles",
+          "barcode": "8901234567890",
+          "sellingPrice": 25,
+          "costPrice": 20,
+          "markup": 25,
+          "storeId": "demo-store-01",
+          "imagePath": null,
+          "imageUrl": null,
+          "isActive": true,
+          "unit": "pcs"
+        }
+      }
+    }
+  }
+}
