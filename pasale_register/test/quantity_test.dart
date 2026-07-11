@@ -7,6 +7,7 @@ import 'package:pasale_register/services/firestore_service.dart';
 import 'package:pasale_register/services/fakes/fake_firestore_service.dart';
 import 'package:pasale_register/screens/checkout_screen.dart';
 import 'package:pasale_register/constants/keys.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   group('Quantity Business Logic Unit Tests', () {
@@ -64,7 +65,8 @@ void main() {
   });
 
   group('Quantity Widget Controls Tests', () {
-    setUp(() {
+    setUp(() async {
+      SharedPreferences.setMockInitialValues({});
       setupLocator(useFakes: true);
     });
 

@@ -54,4 +54,7 @@ class AppKeys {
   static const Key registerProductCostInput = Key('registerProductCostInput');
   static const Key registerProductSaveButton = Key('registerProductSaveButton');
   static const Key registerProductSkipButton = Key('registerProductSkipButton');
+  static const Key registerProductPhotoButton = Key('registerProductPhotoButton');
+  static const Key registerProductPhotoPreview =
+      Key('registerProductPhotoPreview');
 }

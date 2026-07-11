@@ -9,9 +9,15 @@ abstract class FirestoreService {
     String deviceId,
     Map<String, dynamic> deviceMetadata,
   );
-  Future<Product?> getProduct(String id);
-  Future<void> saveProduct(Product product);
-  Stream<List<Product>> streamCatalog();
+
+  /// Lookup by barcode. Prefer [storeId] catalog (per-store pricing).
+  Future<Product?> getProduct(String id, {String? storeId});
+
+  /// Save product under its [Product.storeId] when set, else optional [storeId].
+  Future<void> saveProduct(Product product, {String? storeId});
+
+  /// Stream catalog for a store (or shared/global if [storeId] is null).
+  Stream<List<Product>> streamCatalog({String? storeId});
 
   /// Superadmin camera scope for a store (`stores/{id}/settings/cameraScope`).
   Future<CameraScopePolicy> getCameraScope(String storeId);

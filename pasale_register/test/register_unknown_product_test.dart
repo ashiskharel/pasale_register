@@ -60,8 +60,9 @@ void main() {
     expect(cart.items.first.product.barcode, 'UNKNOWN999');
 
     final fs = locator<FirestoreService>() as FakeFirestoreService;
-    final saved = await fs.getProduct('UNKNOWN999');
+    final saved = await fs.getProduct('UNKNOWN999', storeId: 's1');
     expect(saved, isNotNull);
     expect(saved!.sellingPrice, 50);
+    expect(saved.storeId, 's1');
   });
 }

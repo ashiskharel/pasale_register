@@ -17,6 +17,17 @@ class RealFirestoreService implements FirestoreService {
         .doc('cameraScope');
   }
 
+  CollectionReference<Map<String, dynamic>> _productsCol(String? storeId) {
+    if (storeId != null && storeId.isNotEmpty) {
+      return _firestore
+          .collection('stores')
+          .doc(storeId)
+          .collection('products');
+    }
+    // Legacy / shared fallback
+    return _firestore.collection('products');
+  }
+
   @override
   Future<void> activateStore(String storeId, String storeName) async {
     final store = Store(
@@ -48,21 +59,35 @@ class RealFirestoreService implements FirestoreService {
   }
 
   @override
-  Future<Product?> getProduct(String id) async {
-    final doc = await _firestore.collection('products').doc(id).get();
-    if (!doc.exists || doc.data() == null) return null;
-    return Product.fromMap(doc.data()!, doc.id);
+  Future<Product?> getProduct(String id, {String? storeId}) async {
+    // Prefer per-store catalog (store-specific price + photo).
+    if (storeId != null && storeId.isNotEmpty) {
+      final storeDoc = await _productsCol(storeId).doc(id).get();
+      if (storeDoc.exists && storeDoc.data() != null) {
+        return Product.fromMap(storeDoc.data()!, storeDoc.id);
+      }
+    }
+    // Fallback to global products collection (seed / legacy).
+    final global = await _firestore.collection('products').doc(id).get();
+    if (!global.exists || global.data() == null) return null;
+    return Product.fromMap(global.data()!, global.id);
   }
 
   @override
-  Future<void> saveProduct(Product product) async {
-    await _firestore.collection('products').doc(product.id).set(product.toMap());
+  Future<void> saveProduct(Product product, {String? storeId}) async {
+    final sid = product.storeId ?? storeId;
+    final toSave = product.storeId == null && sid != null
+        ? product.copyWith(storeId: sid)
+        : product;
+    await _productsCol(sid).doc(toSave.id).set(toSave.toMap());
   }
 
   @override
-  Stream<List<Product>> streamCatalog() {
-    return _firestore.collection('products').snapshots().map((snapshot) {
-      return snapshot.docs.map((doc) => Product.fromMap(doc.data(), doc.id)).toList();
+  Stream<List<Product>> streamCatalog({String? storeId}) {
+    return _productsCol(storeId).snapshots().map((snapshot) {
+      return snapshot.docs
+          .map((doc) => Product.fromMap(doc.data(), doc.id))
+          .toList();
     });
   }
 
@@ -70,7 +95,6 @@ class RealFirestoreService implements FirestoreService {
   Future<CameraScopePolicy> getCameraScope(String storeId) async {
     final doc = await _cameraScopeRef(storeId).get();
     if (!doc.exists || doc.data() == null) {
-      // Seed free default so superadmin can edit later.
       final free = CameraScopePolicy.freeDefault(updatedBy: 'system');
       await saveCameraScope(storeId, free);
       return free;

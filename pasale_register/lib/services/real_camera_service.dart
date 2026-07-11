@@ -16,4 +16,7 @@ class RealCameraService implements CameraService {
     }
     return _controller.captureStill();
   }
+
+  @override
+  Future<String?> captureProductPhoto() => captureInvoicePhoto();
 }

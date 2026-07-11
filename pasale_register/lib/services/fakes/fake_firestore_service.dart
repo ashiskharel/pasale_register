@@ -13,7 +13,10 @@ class FakeFirestoreService implements FirestoreService {
 
   final Map<String, String> _stores = {};
   final Map<String, Map<String, Map<String, dynamic>>> _devices = {};
+  /// Shared/seed products (no store).
   final Map<String, Product> _products = {};
+  /// Per-store catalogs: storeId -> barcode -> product.
+  final Map<String, Map<String, Product>> _storeProducts = {};
   final Map<String, CameraScopePolicy> _cameraScopes = {};
   bool checkStoreActivation = false;
   bool _seeded = false;
@@ -52,7 +55,8 @@ class FakeFirestoreService implements FirestoreService {
     _staticSeedingFuture = completer.future;
 
     try {
-      final jsonString = await rootBundle.loadString('assets/seeded_products.json');
+      final jsonString =
+          await rootBundle.loadString('assets/seeded_products.json');
       final List<dynamic> data = json.decode(jsonString) as List<dynamic>;
       final List<Product> loaded = [];
       for (var item in data) {
@@ -76,10 +80,10 @@ class FakeFirestoreService implements FirestoreService {
   final StreamController<List<Product>> _catalogController =
       StreamController<List<Product>>.broadcast();
 
-  // Helper getters/methods for tests to verify state:
   Map<String, String> get stores => _stores;
   Map<String, Map<String, Map<String, dynamic>>> get devices => _devices;
   Map<String, Product> get products => _products;
+  Map<String, Map<String, Product>> get storeProducts => _storeProducts;
 
   @override
   Future<void> activateStore(String storeId, String storeName) async {
@@ -113,31 +117,59 @@ class FakeFirestoreService implements FirestoreService {
   }
 
   @override
-  Future<Product?> getProduct(String id) async {
+  Future<Product?> getProduct(String id, {String? storeId}) async {
     await _ensureSeeded();
+    if (storeId != null && storeId.isNotEmpty) {
+      final storeMap = _storeProducts[storeId];
+      if (storeMap != null && storeMap.containsKey(id)) {
+        return storeMap[id];
+      }
+    }
     return _products[id];
   }
 
   @override
-  Future<void> saveProduct(Product product) async {
+  Future<void> saveProduct(Product product, {String? storeId}) async {
     await _ensureSeeded();
-    _products[product.id] = product;
-    _catalogController.add(_products.values.toList());
+    final sid = product.storeId ?? storeId;
+    final toSave = (product.storeId == null && sid != null)
+        ? product.copyWith(storeId: sid)
+        : product;
+    if (sid != null && sid.isNotEmpty) {
+      _storeProducts.putIfAbsent(sid, () => {})[toSave.id] = toSave;
+      _catalogController.add(_storeProducts[sid]!.values.toList());
+    } else {
+      _products[toSave.id] = toSave;
+      _catalogController.add(_products.values.toList());
+    }
   }
 
   @override
-  Stream<List<Product>> streamCatalog() {
+  Stream<List<Product>> streamCatalog({String? storeId}) {
     final controller = StreamController<List<Product>>();
-    
+
     _ensureSeeded().then((_) {
       if (!controller.isClosed) {
-        controller.add(_products.values.toList());
+        if (storeId != null && storeId.isNotEmpty) {
+          final storeMap = _storeProducts[storeId] ?? {};
+          // Merge store-specific over seeds for same barcode.
+          final merged = Map<String, Product>.from(_products)..addAll(storeMap);
+          controller.add(merged.values.toList());
+        } else {
+          controller.add(_products.values.toList());
+        }
       }
     });
 
     final subscription = _catalogController.stream.listen((data) {
       if (!controller.isClosed) {
-        controller.add(data);
+        if (storeId != null && storeId.isNotEmpty) {
+          final storeMap = _storeProducts[storeId] ?? {};
+          final merged = Map<String, Product>.from(_products)..addAll(storeMap);
+          controller.add(merged.values.toList());
+        } else {
+          controller.add(data);
+        }
       }
     });
 
@@ -160,6 +192,5 @@ class FakeFirestoreService implements FirestoreService {
     _cameraScopes[storeId] = policy;
   }
 
-  /// Test helper
   Map<String, CameraScopePolicy> get cameraScopes => _cameraScopes;
 }

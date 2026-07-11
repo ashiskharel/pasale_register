@@ -24,4 +24,7 @@ class FakeCameraService implements CameraService {
     }
     return _mockPath;
   }
+
+  @override
+  Future<String?> captureProductPhoto() => captureInvoicePhoto();
 }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../constants/keys.dart';
 import '../models/product.dart';
 import '../services/service_locator.dart';
@@ -85,6 +86,9 @@ class _CatalogScreenState extends State<CatalogScreen> {
       return;
     }
 
+    final prefs = await SharedPreferences.getInstance();
+    final storeId = prefs.getString('storeId');
+
     final product = Product(
       id: barcode, // using barcode as id
       name: name,
@@ -92,10 +96,11 @@ class _CatalogScreenState extends State<CatalogScreen> {
       sellingPrice: sellingPrice,
       costPrice: costPrice,
       markup: markup,
+      storeId: storeId,
     );
 
     try {
-      await locator<FirestoreService>().saveProduct(product);
+      await locator<FirestoreService>().saveProduct(product, storeId: storeId);
       setState(() {
         _status = 'Product Saved: $name';
         _showAddForm = false;
@@ -204,8 +209,13 @@ class _CatalogScreenState extends State<CatalogScreen> {
               ),
             ),
           Expanded(
-            child: StreamBuilder<List<Product>>(
-              stream: locator<FirestoreService>().streamCatalog(),
+            child: FutureBuilder<String?>(
+              future: SharedPreferences.getInstance()
+                  .then((p) => p.getString('storeId')),
+              builder: (context, storeSnap) {
+                final storeId = storeSnap.data;
+                return StreamBuilder<List<Product>>(
+              stream: locator<FirestoreService>().streamCatalog(storeId: storeId),
               builder: (context, snapshot) {
                 if (snapshot.hasError) {
                   return Center(child: Text('Error: ${snapshot.error}'));
@@ -226,7 +236,10 @@ class _CatalogScreenState extends State<CatalogScreen> {
                     return ListTile(
                       key: ValueKey('catalog_item_${product.barcode}'),
                       title: Text(product.name),
-                      subtitle: Text('Barcode: ${product.barcode}'),
+                      subtitle: Text(
+                        'Barcode: ${product.barcode}'
+                        '${product.storeId != null ? ' · store' : ''}',
+                      ),
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -234,7 +247,10 @@ class _CatalogScreenState extends State<CatalogScreen> {
                           const SizedBox(width: 8),
                           IconButton(
                             key: ValueKey('add_to_cart_${product.barcode}'),
-                            icon: const Icon(Icons.add_shopping_cart, color: Colors.blue),
+                            icon: const Icon(
+                              Icons.add_shopping_cart,
+                              color: Colors.blue,
+                            ),
                             onPressed: () {
                               locator<CartService>().addProduct(product);
                               setState(() {
@@ -246,6 +262,8 @@ class _CatalogScreenState extends State<CatalogScreen> {
                       ),
                     );
                   },
+                );
+              },
                 );
               },
             ),

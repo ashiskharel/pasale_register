@@ -1,15 +1,19 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../constants/keys.dart';
 import '../models/cart_item.dart';
 import '../models/product.dart';
+import '../services/camera_service.dart';
 import '../services/cart_service.dart';
 import '../services/firestore_service.dart';
 import '../services/scanner_service.dart';
 import '../services/service_locator.dart';
 import '../services/sharing_service.dart';
 import '../utils/bill_formatter.dart';
+import '../utils/product_image_store.dart';
 
 class CheckoutScreen extends StatefulWidget {
   const CheckoutScreen({super.key});
@@ -81,12 +85,20 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       return;
     }
     try {
-      final product = await locator<FirestoreService>().getProduct(trimmed);
+      final prefs = await SharedPreferences.getInstance();
+      final storeId = prefs.getString('storeId');
+      final product = await locator<FirestoreService>().getProduct(
+        trimmed,
+        storeId: storeId,
+      );
       if (product != null) {
         await _pushProductToCart(product);
       } else {
-        // Original requirement: unrecognized barcode → register on the fly.
-        final registered = await _promptRegisterProduct(trimmed);
+        // Unrecognized barcode → register for this store (price + photo).
+        final registered = await _promptRegisterProduct(
+          trimmed,
+          storeId: storeId,
+        );
         if (registered != null) {
           await _pushProductToCart(registered);
         } else {
@@ -127,8 +139,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     }
   }
 
-  /// Dialog to create a catalog product for an unknown barcode, then save.
-  Future<Product?> _promptRegisterProduct(String barcode) async {
+  /// Dialog: name, store price, and product photo for this store's catalog.
+  Future<Product?> _promptRegisterProduct(
+    String barcode, {
+    String? storeId,
+  }) async {
     if (!mounted) return null;
     _registeringProduct = true;
 
@@ -136,135 +151,213 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     final priceController = TextEditingController();
     final costController = TextEditingController(text: '0');
     final formKey = GlobalKey<FormState>();
+    String? photoPath;
 
     try {
       final result = await showDialog<Product>(
         context: context,
         barrierDismissible: false,
         builder: (ctx) {
-          return AlertDialog(
-            key: AppKeys.registerUnknownProductDialog,
-            title: const Text('Register new product'),
-            content: Form(
-              key: formKey,
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(
-                      'Barcode / QR not in catalog:\n$barcode',
-                      style: Theme.of(ctx).textTheme.bodyMedium,
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      key: AppKeys.registerProductNameInput,
-                      controller: nameController,
-                      decoration: const InputDecoration(
-                        labelText: 'Product name *',
-                        border: OutlineInputBorder(),
-                      ),
-                      textCapitalization: TextCapitalization.words,
-                      validator: (v) =>
-                          (v == null || v.trim().isEmpty) ? 'Name required' : null,
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      key: AppKeys.registerProductPriceInput,
-                      controller: priceController,
-                      decoration: const InputDecoration(
-                        labelText: 'Selling price (Rs.) *',
-                        border: OutlineInputBorder(),
-                      ),
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
-                      validator: (v) {
-                        final n = double.tryParse(v?.trim() ?? '');
-                        if (n == null) return 'Enter a valid price';
-                        if (n < 0) return 'Price cannot be negative';
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      key: AppKeys.registerProductCostInput,
-                      controller: costController,
-                      decoration: const InputDecoration(
-                        labelText: 'Cost price (Rs.) optional',
-                        border: OutlineInputBorder(),
-                      ),
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
-                      validator: (v) {
-                        if (v == null || v.trim().isEmpty) return null;
-                        final n = double.tryParse(v.trim());
-                        if (n == null) return 'Enter a valid number';
-                        if (n < 0) return 'Cost cannot be negative';
-                        return null;
-                      },
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            actions: [
-              TextButton(
-                key: AppKeys.registerProductSkipButton,
-                onPressed: () => Navigator.of(ctx).pop(null),
-                child: const Text('Skip'),
-              ),
-              FilledButton(
-                key: AppKeys.registerProductSaveButton,
-                onPressed: () async {
-                  if (!(formKey.currentState?.validate() ?? false)) return;
-                  final name = nameController.text.trim();
-                  final selling = double.parse(priceController.text.trim());
-                  final costText = costController.text.trim();
-                  final cost =
-                      costText.isEmpty ? 0.0 : double.parse(costText);
-                  if (selling < cost) {
-                    ScaffoldMessenger.of(ctx).showSnackBar(
-                      const SnackBar(
-                        content: Text(
-                          'Selling price cannot be less than cost price',
+          return StatefulBuilder(
+            builder: (ctx, setDialogState) {
+              return AlertDialog(
+                key: AppKeys.registerUnknownProductDialog,
+                title: const Text('Register for this store'),
+                content: Form(
+                  key: formKey,
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(
+                          'Code not in this store’s catalog:\n$barcode\n\n'
+                          'Prices are store-specific — add a photo of the item/price tag if you can.',
+                          style: Theme.of(ctx).textTheme.bodyMedium,
                         ),
-                      ),
-                    );
-                    return;
-                  }
-                  final markup =
-                      cost > 0 ? ((selling - cost) / cost) * 100.0 : 0.0;
-                  final product = Product(
-                    id: barcode,
-                    name: name,
-                    barcode: barcode,
-                    sellingPrice: selling,
-                    costPrice: cost,
-                    markup: markup,
-                  );
-                  try {
-                    await locator<FirestoreService>().saveProduct(product);
-                    if (ctx.mounted) Navigator.of(ctx).pop(product);
-                  } catch (e) {
-                    if (ctx.mounted) {
-                      ScaffoldMessenger.of(ctx).showSnackBar(
-                        SnackBar(content: Text('Save failed: $e')),
+                        const SizedBox(height: 12),
+                        Center(
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Container(
+                              key: AppKeys.registerProductPhotoPreview,
+                              width: 140,
+                              height: 140,
+                              color: Colors.grey.shade200,
+                              child: photoPath != null &&
+                                      File(photoPath!).existsSync()
+                                  ? Image.file(
+                                      File(photoPath!),
+                                      fit: BoxFit.cover,
+                                    )
+                                  : photoPath != null
+                                      ? const Icon(Icons.image, size: 48)
+                                      : const Icon(
+                                          Icons.add_a_photo_outlined,
+                                          size: 40,
+                                          color: Colors.grey,
+                                        ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        OutlinedButton.icon(
+                          key: AppKeys.registerProductPhotoButton,
+                          onPressed: () async {
+                            try {
+                              // Pause continuous scan so still capture can use camera.
+                              await locator<ScannerService>().stopScanning();
+                              final path = await locator<CameraService>()
+                                  .captureProductPhoto();
+                              if (path != null && path.isNotEmpty) {
+                                setDialogState(() => photoPath = path);
+                              }
+                            } catch (e) {
+                              if (ctx.mounted) {
+                                ScaffoldMessenger.of(ctx).showSnackBar(
+                                  SnackBar(content: Text('Photo failed: $e')),
+                                );
+                              }
+                            }
+                          },
+                          icon: const Icon(Icons.camera_alt),
+                          label: Text(
+                            photoPath == null
+                                ? 'Take product photo'
+                                : 'Retake photo',
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          key: AppKeys.registerProductNameInput,
+                          controller: nameController,
+                          decoration: const InputDecoration(
+                            labelText: 'Product name *',
+                            border: OutlineInputBorder(),
+                          ),
+                          textCapitalization: TextCapitalization.words,
+                          validator: (v) => (v == null || v.trim().isEmpty)
+                              ? 'Name required'
+                              : null,
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          key: AppKeys.registerProductPriceInput,
+                          controller: priceController,
+                          decoration: const InputDecoration(
+                            labelText: 'This store’s selling price (Rs.) *',
+                            border: OutlineInputBorder(),
+                          ),
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          validator: (v) {
+                            final n = double.tryParse(v?.trim() ?? '');
+                            if (n == null) return 'Enter a valid price';
+                            if (n < 0) return 'Price cannot be negative';
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          key: AppKeys.registerProductCostInput,
+                          controller: costController,
+                          decoration: const InputDecoration(
+                            labelText: 'Cost price (Rs.) optional',
+                            border: OutlineInputBorder(),
+                          ),
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          validator: (v) {
+                            if (v == null || v.trim().isEmpty) return null;
+                            final n = double.tryParse(v.trim());
+                            if (n == null) return 'Enter a valid number';
+                            if (n < 0) return 'Cost cannot be negative';
+                            return null;
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    key: AppKeys.registerProductSkipButton,
+                    onPressed: () => Navigator.of(ctx).pop(null),
+                    child: const Text('Skip'),
+                  ),
+                  FilledButton(
+                    key: AppKeys.registerProductSaveButton,
+                    onPressed: () async {
+                      if (!(formKey.currentState?.validate() ?? false)) return;
+                      final name = nameController.text.trim();
+                      final selling =
+                          double.parse(priceController.text.trim());
+                      final costText = costController.text.trim();
+                      final cost =
+                          costText.isEmpty ? 0.0 : double.parse(costText);
+                      if (selling < cost) {
+                        ScaffoldMessenger.of(ctx).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'Selling price cannot be less than cost price',
+                            ),
+                          ),
+                        );
+                        return;
+                      }
+                      final markup =
+                          cost > 0 ? ((selling - cost) / cost) * 100.0 : 0.0;
+
+                      String? storedImage = photoPath;
+                      if (photoPath != null &&
+                          storeId != null &&
+                          storeId.isNotEmpty) {
+                        storedImage = await persistProductImage(
+                          sourcePath: photoPath!,
+                          storeId: storeId,
+                          barcode: barcode,
+                        );
+                      }
+
+                      final product = Product(
+                        id: barcode,
+                        name: name,
+                        barcode: barcode,
+                        sellingPrice: selling,
+                        costPrice: cost,
+                        markup: markup,
+                        storeId: storeId,
+                        imagePath: storedImage,
                       );
-                    }
-                  }
-                },
-                child: const Text('Save & add'),
-              ),
-            ],
+                      try {
+                        await locator<FirestoreService>().saveProduct(
+                          product,
+                          storeId: storeId,
+                        );
+                        if (ctx.mounted) Navigator.of(ctx).pop(product);
+                      } catch (e) {
+                        if (ctx.mounted) {
+                          ScaffoldMessenger.of(ctx).showSnackBar(
+                            SnackBar(content: Text('Save failed: $e')),
+                          );
+                        }
+                      }
+                    },
+                    child: const Text('Save & add'),
+                  ),
+                ],
+              );
+            },
           );
         },
       );
       return result;
     } finally {
       _registeringProduct = false;
-      // Dispose after the dialog route is fully gone (avoids disposed controller assert).
+      // Do not auto-call scan() here — the scan loop resumes on its own
+      // once _registeringProduct is false; ensureSession restarts the stream.
       WidgetsBinding.instance.addPostFrameCallback((_) {
         nameController.dispose();
         priceController.dispose();
@@ -286,6 +379,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           await Future.delayed(const Duration(milliseconds: 150));
           continue;
         }
+        // Restart camera stream after product photo capture stopped it.
         final barcode = await locator<ScannerService>().scan();
         if (!_isScanning) {
           break;
@@ -389,8 +483,24 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       itemCount: _cart.length,
       itemBuilder: (context, index) {
         final item = _cart[index];
+        final img = item.product.imagePath;
+        Widget? leading;
+        if (img != null && img.isNotEmpty) {
+          if (img.startsWith('/') || img.contains(':\\') || img.contains(':/')) {
+            final f = File(img);
+            leading = f.existsSync()
+                ? ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: Image.file(f, width: 48, height: 48, fit: BoxFit.cover),
+                  )
+                : const Icon(Icons.inventory_2_outlined);
+          } else {
+            leading = const Icon(Icons.inventory_2_outlined);
+          }
+        }
         return ListTile(
           key: ValueKey('cart_item_${item.product.barcode}'),
+          leading: leading ?? const Icon(Icons.inventory_2_outlined),
           title: Text(item.product.name),
           subtitle: Text(
             'Rs. ${item.product.sellingPrice.toStringAsFixed(2)} × ${item.quantity}',

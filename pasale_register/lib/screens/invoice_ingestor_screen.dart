@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../constants/keys.dart';
 import '../models/product.dart';
 import '../services/service_locator.dart';
@@ -96,6 +97,9 @@ class _InvoiceIngestorScreenState extends State<InvoiceIngestorScreen> {
       return;
     }
 
+    final prefs = await SharedPreferences.getInstance();
+    final storeId = prefs.getString('storeId');
+
     final product = Product(
       id: barcode,
       name: name,
@@ -103,10 +107,12 @@ class _InvoiceIngestorScreenState extends State<InvoiceIngestorScreen> {
       sellingPrice: _calculatedSellingPrice,
       costPrice: cost,
       markup: markup,
+      storeId: storeId,
+      imagePath: _imagePath.isEmpty ? null : _imagePath,
     );
 
     try {
-      await locator<FirestoreService>().saveProduct(product);
+      await locator<FirestoreService>().saveProduct(product, storeId: storeId);
       setState(() {
         _status = 'Invoice product saved successfully';
         _barcodeController.clear();
