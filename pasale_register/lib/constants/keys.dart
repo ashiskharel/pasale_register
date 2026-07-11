@@ -46,4 +46,12 @@ class AppKeys {
   static const Key navToCameraScope = Key('navToCameraScope');
   static const Key cameraScopeTier = Key('cameraScopeTier');
   static const Key saveCameraScopeButton = Key('saveCameraScopeButton');
+
+  static const Key registerUnknownProductDialog =
+      Key('registerUnknownProductDialog');
+  static const Key registerProductNameInput = Key('registerProductNameInput');
+  static const Key registerProductPriceInput = Key('registerProductPriceInput');
+  static const Key registerProductCostInput = Key('registerProductCostInput');
+  static const Key registerProductSaveButton = Key('registerProductSaveButton');
+  static const Key registerProductSkipButton = Key('registerProductSkipButton');
 }
