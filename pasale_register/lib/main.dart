@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'bootstrap.dart';
 import 'constants/keys.dart';
 import 'screens/activation_screen.dart';
 import 'screens/camera_scope_screen.dart';
@@ -9,17 +10,16 @@ import 'screens/checkout_screen.dart';
 import 'screens/invoice_ingestor_screen.dart';
 import 'services/service_locator.dart';
 
-/// Set to `false` for device builds with real ML Kit camera + Firestore.
-const bool kUseFakeServices = true;
-
-void main() {
-  WidgetsFlutterBinding.ensureInitialized();
-  setupLocator(useFakes: kUseFakeServices);
-  runApp(const MyApp());
+void main() async {
+  final result = await bootstrap();
+  debugPrint('Pasale bootstrap: ${result.message}');
+  runApp(MyApp(bootstrap: result));
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  const MyApp({super.key, this.bootstrap});
+
+  final BootstrapResult? bootstrap;
 
   @override
   Widget build(BuildContext context) {
@@ -27,14 +27,17 @@ class MyApp extends StatelessWidget {
       title: 'Pasale Register',
       theme: ThemeData(
         primarySwatch: Colors.blue,
+        useMaterial3: true,
       ),
-      home: const MainScreen(),
+      home: MainScreen(bootstrap: bootstrap),
     );
   }
 }
 
 class MainScreen extends StatefulWidget {
-  const MainScreen({super.key});
+  const MainScreen({super.key, this.bootstrap});
+
+  final BootstrapResult? bootstrap;
 
   @override
   State<MainScreen> createState() => _MainScreenState();
@@ -61,7 +64,6 @@ class _MainScreenState extends State<MainScreen> {
         deviceId != null &&
         deviceId.isNotEmpty &&
         isActivated) {
-      // Step 2: load camera scope for this store (barcode/QR free default).
       try {
         await loadAndApplyCameraScope(storeId);
       } catch (e) {
@@ -84,7 +86,6 @@ class _MainScreenState extends State<MainScreen> {
       _isActivated = true;
       _currentIndex = 1;
     });
-    // Apply scope right after activation.
     SharedPreferences.getInstance().then((prefs) async {
       final storeId = prefs.getString('storeId');
       if (storeId != null && storeId.isNotEmpty) {
@@ -114,12 +115,57 @@ class _MainScreenState extends State<MainScreen> {
     }
   }
 
+  String get _backendLabel {
+    final b = widget.bootstrap;
+    if (b == null) return '';
+    return switch (b.backend) {
+      ServiceBackend.fakes => 'Fakes',
+      ServiceBackend.realCamera => 'Real camera · local catalog',
+      ServiceBackend.production => 'Firebase · real camera',
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: SafeArea(
         child: Column(
           children: [
+            if (widget.bootstrap != null)
+              Material(
+                color: widget.bootstrap!.firebaseReady
+                    ? Colors.green.shade50
+                    : Colors.orange.shade50,
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  child: Row(
+                    children: [
+                      Icon(
+                        widget.bootstrap!.firebaseReady
+                            ? Icons.cloud_done
+                            : Icons.camera_alt,
+                        size: 18,
+                        color: widget.bootstrap!.firebaseReady
+                            ? Colors.green.shade800
+                            : Colors.orange.shade900,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _backendLabel,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: widget.bootstrap!.firebaseReady
+                                ? Colors.green.shade900
+                                : Colors.orange.shade900,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             Container(
               color: Colors.grey[200],
               padding: const EdgeInsets.symmetric(vertical: 4.0),
