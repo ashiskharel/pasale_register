@@ -1,0 +1,21 @@
+mlkit_camera
+Copyright 2026 Pasale / contributors
+
+This product includes software developed for open-source distribution under
+the Apache License, Version 2.0.
+
+---------------------------------------------------------------------------
+Third-party notice — Google ML Kit
+
+This package depends on Google ML Kit Flutter plugins
+(google_mlkit_barcode_scanning, google_mlkit_text_recognition,
+google_mlkit_object_detection, google_mlkit_commons) and, at runtime,
+Google's ML Kit native binaries.
+
+Google ML Kit is proprietary software owned by Google LLC. It is free to use
+subject to Google's terms of service and applicable ML Kit terms. This Apache-2.0
+license applies only to the Dart/Flutter source code in this repository and does
+NOT relicense, sublicense, or open-source Google ML Kit itself.
+
+See: https://developers.google.com/ml-kit/terms
+---------------------------------------------------------------------------

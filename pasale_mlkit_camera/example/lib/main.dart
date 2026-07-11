@@ -1,121 +1,443 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:mlkit_camera/mlkit_camera.dart';
+import 'package:share_plus/share_plus.dart';
 
 void main() {
-  runApp(const MyApp());
+  WidgetsFlutterBinding.ensureInitialized();
+  runApp(const MlkitCameraExampleApp());
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class MlkitCameraExampleApp extends StatelessWidget {
+  const MlkitCameraExampleApp({super.key});
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
+      title: 'ML Kit Camera',
       theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: .fromSeed(seedColor: Colors.deepPurple),
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
+        useMaterial3: true,
       ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      home: const CameraHomePage(),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
+class CameraHomePage extends StatefulWidget {
+  const CameraHomePage({super.key});
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  State<CameraHomePage> createState() => _CameraHomePageState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+class _CameraHomePageState extends State<CameraHomePage> {
+  late final MlkitCameraController _controller;
+  StreamSubscription<VisionResult>? _sub;
+  late CameraScopePolicy _policy;
+  late CameraVisionMode _mode;
+  final List<VisionResult> _history = [];
+  bool _torch = false;
+  bool _ready = false;
 
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
+  @override
+  void initState() {
+    super.initState();
+    // Free users start with barcode + QR only.
+    _policy = CameraScopePolicy.freeDefault(updatedBy: 'system');
+    _mode = _policy.defaultMode;
+    _controller = MlkitCameraController(policy: _policy);
+    _bootstrap();
+  }
+
+  Future<void> _bootstrap() async {
+    await _controller.initialize();
+    _sub = _controller.results.listen((r) {
+      if (!mounted) return;
+      setState(() {
+        _history.insert(0, r);
+        if (_history.length > 50) {
+          _history.removeLast();
+        }
+      });
     });
+    if (mounted) setState(() => _ready = true);
+  }
+
+  @override
+  void dispose() {
+    _sub?.cancel();
+    unawaited(_controller.close());
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _applyPolicy(CameraScopePolicy policy) async {
+    _policy = policy;
+    await _controller.updatePolicy(policy);
+    _mode = _controller.mode;
+    setState(() {});
+  }
+
+  Future<void> _toggleRun() async {
+    if (_controller.isRunning) {
+      await _controller.stop();
+    } else {
+      await _controller.start(mode: _mode);
+    }
+    setState(() {});
+  }
+
+  Future<void> _onMode(CameraVisionMode mode) async {
+    if (!_policy.allowsMode(mode)) {
+      final cap = CameraScopePolicy.capabilityForMode(mode);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${cap.displayName} is premium / disabled. '
+            'Open Superadmin to change camera scope.',
+          ),
+        ),
+      );
+      return;
+    }
+    setState(() => _mode = mode);
+    if (_controller.isRunning) {
+      await _controller.setMode(mode);
+    }
+    setState(() {});
+  }
+
+  String _exportJson() {
+    final payload = {
+      'schemaVersion': VisionResult.schemaVersion,
+      'exportedAt': DateTime.now().toUtc().toIso8601String(),
+      'policy': _policy.toJson(),
+      'mode': _mode.name,
+      'results': _history.map((e) => e.toJson()).toList(),
+    };
+    return const JsonEncoder.withIndent('  ').convert(payload);
+  }
+
+  Future<void> _copyJson() async {
+    await Clipboard.setData(ClipboardData(text: _exportJson()));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('JSON copied to clipboard')),
+    );
+  }
+
+  Future<void> _shareJson() async {
+    await Share.share(_exportJson(), subject: 'mlkit_camera export');
+  }
+
+  Future<void> _openSuperadmin() async {
+    final next = await Navigator.of(context).push<CameraScopePolicy>(
+      MaterialPageRoute(
+        builder: (_) => SuperadminScopePage(policy: _policy),
+      ),
+    );
+    if (next != null) {
+      await _applyPolicy(next);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
+    final locked = _policy.lockedPremiumCapabilities;
+
     return Scaffold(
       appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
+        title: const Text('Barcode & QR Camera'),
+        actions: [
+          IconButton(
+            tooltip: 'Superadmin camera scope',
+            onPressed: _openSuperadmin,
+            icon: const Icon(Icons.admin_panel_settings),
+          ),
+          IconButton(
+            tooltip: 'Torch',
+            onPressed: !_ready
+                ? null
+                : () async {
+                    _torch = !_torch;
+                    await _controller.setTorch(_torch);
+                    setState(() {});
+                  },
+            icon: Icon(_torch ? Icons.flash_on : Icons.flash_off),
+          ),
+          IconButton(
+            tooltip: 'Switch camera',
+            onPressed: !_ready ? null : () => _controller.switchCamera(),
+            icon: const Icon(Icons.cameraswitch),
+          ),
+          IconButton(
+            tooltip: 'Copy JSON',
+            onPressed: _history.isEmpty ? null : _copyJson,
+            icon: const Icon(Icons.copy),
+          ),
+          IconButton(
+            tooltip: 'Share JSON',
+            onPressed: _history.isEmpty ? null : _shareJson,
+            icon: const Icon(Icons.share),
+          ),
+        ],
       ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: .center,
-          children: [
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
+      body: Column(
+        children: [
+          Material(
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+            child: ListTile(
+              dense: true,
+              leading: Icon(
+                _policy.tier == PlanTier.premium
+                    ? Icons.workspace_premium
+                    : Icons.qr_code_2,
+              ),
+              title: Text(
+                'Plan: ${_policy.tier.name} · Scope: '
+                '${_policy.enabled.map((e) => e.displayName).join(', ')}',
+              ),
+              subtitle: locked.isEmpty
+                  ? const Text('All premium vision capabilities unlocked')
+                  : Text(
+                      'Upgrade / superadmin for: '
+                      '${locked.map((e) => e.displayName).join(', ')}',
+                    ),
             ),
-          ],
-        ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            child: Wrap(
+              spacing: 6,
+              children: CameraVisionMode.values.map((m) {
+                final allowed = _policy.allowsMode(m);
+                return FilterChip(
+                  label: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(_modeLabel(m)),
+                      if (!allowed) ...[
+                        const SizedBox(width: 4),
+                        const Icon(Icons.lock, size: 14),
+                      ],
+                    ],
+                  ),
+                  selected: _mode == m && allowed,
+                  onSelected: (_) => _onMode(m),
+                );
+              }).toList(),
+            ),
+          ),
+          if (_controller.error != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Text(
+                _controller.error!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ),
+          Expanded(
+            flex: 3,
+            child: ColoredBox(
+              color: Colors.black,
+              child: _ready
+                  ? MlkitCameraView(controller: _controller)
+                  : const Center(child: CircularProgressIndicator()),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: !_ready ? null : _toggleRun,
+                    icon: Icon(
+                      _controller.isRunning ? Icons.stop : Icons.play_arrow,
+                    ),
+                    label: Text(
+                      _controller.isRunning
+                          ? 'Done Scanning / OK'
+                          : 'Start barcode & QR scan',
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                OutlinedButton(
+                  onPressed: _history.isEmpty
+                      ? null
+                      : () => setState(_history.clear),
+                  child: const Text('Clear'),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: _history.isEmpty
+                ? const Center(
+                    child: Text(
+                      'Point at a product barcode or QR code.\n'
+                      'Premium: object detection & batch checkout later.',
+                      textAlign: TextAlign.center,
+                    ),
+                  )
+                : ListView.builder(
+                    itemCount: _history.length,
+                    itemBuilder: (context, i) {
+                      final r = _history[i];
+                      return ListTile(
+                        dense: true,
+                        leading: Icon(_modeIcon(r.mode)),
+                        title: Text(_summary(r)),
+                        subtitle: Text(
+                          r.timestamp.toLocal().toIso8601String(),
+                          style: const TextStyle(fontSize: 11),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
+    );
+  }
+
+  String _modeLabel(CameraVisionMode m) => switch (m) {
+        CameraVisionMode.barcodeQr => 'Barcode & QR',
+        CameraVisionMode.text => 'OCR',
+        CameraVisionMode.objectDetection => 'Objects',
+        CameraVisionMode.batchCheckout => 'Batch',
+      };
+
+  IconData _modeIcon(CameraVisionMode m) => switch (m) {
+        CameraVisionMode.barcodeQr => Icons.qr_code_scanner,
+        CameraVisionMode.text => Icons.text_fields,
+        CameraVisionMode.objectDetection => Icons.category,
+        CameraVisionMode.batchCheckout => Icons.shopping_basket,
+      };
+
+  String _summary(VisionResult r) {
+    final parts = <String>[];
+    if (r.barcodes.isNotEmpty) {
+      parts.add(
+        'Code: ${r.barcodes.map((b) => '${b.rawValue}'
+            '${b.format != null ? ' (${b.format})' : ''}').join(', ')}',
+      );
+    }
+    if (r.textBlocks.isNotEmpty) {
+      final t = r.textBlocks.map((b) => b.text).join(' | ');
+      parts.add('TXT: ${t.length > 60 ? '${t.substring(0, 60)}…' : t}');
+    }
+    if (r.objects.isNotEmpty) {
+      parts.add(
+        'OBJ: ${r.objects.map((o) => o.labels.isNotEmpty ? o.labels.first.text : '#${o.trackingId}').join(', ')}',
+      );
+    }
+    return parts.isEmpty ? '(empty)' : parts.join(' · ');
+  }
+}
+
+/// Simulates superadmin changing camera scope / plan tier for a store.
+class SuperadminScopePage extends StatefulWidget {
+  const SuperadminScopePage({super.key, required this.policy});
+
+  final CameraScopePolicy policy;
+
+  @override
+  State<SuperadminScopePage> createState() => _SuperadminScopePageState();
+}
+
+class _SuperadminScopePageState extends State<SuperadminScopePage> {
+  late CameraScopePolicy _draft;
+
+  @override
+  void initState() {
+    super.initState();
+    _draft = widget.policy;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Superadmin · Camera scope'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, _draft),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Text(
+            'Change what this store’s camera can do without shipping a new app. '
+            'Free users get barcode & QR; object detection and batch segmentation '
+            'are premium (enable after models are trained / self-labeled).',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 16),
+          Text('Plan tier', style: Theme.of(context).textTheme.titleMedium),
+          SegmentedButton<PlanTier>(
+            segments: const [
+              ButtonSegment(value: PlanTier.free, label: Text('Free')),
+              ButtonSegment(value: PlanTier.premium, label: Text('Premium')),
+            ],
+            selected: {_draft.tier},
+            onSelectionChanged: (s) {
+              setState(() {
+                _draft = _draft.withTier(
+                  s.first,
+                  resetToPreset: true,
+                  updatedBy: 'superadmin@demo',
+                );
+              });
+            },
+          ),
+          const SizedBox(height: 24),
+          Text(
+            'Capabilities',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 8),
+          ...CameraCapability.values.map((cap) {
+            final on = _draft.allows(cap);
+            return SwitchListTile(
+              title: Text(cap.displayName),
+              subtitle: Text(
+                cap.description +
+                    (cap.isPremiumDefault ? ' · premium default' : ''),
+              ),
+              value: on,
+              onChanged: (v) {
+                setState(() {
+                  _draft = _draft.withCapability(
+                    cap,
+                    enabled: v,
+                    updatedBy: 'superadmin@demo',
+                  );
+                });
+              },
+            );
+          }),
+          const SizedBox(height: 16),
+          Text(
+            'Policy JSON (persist to Firestore later)',
+            style: Theme.of(context).textTheme.titleSmall,
+          ),
+          const SizedBox(height: 8),
+          SelectableText(
+            const JsonEncoder.withIndent('  ').convert(_draft.toJson()),
+            style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+          ),
+        ],
       ),
     );
   }

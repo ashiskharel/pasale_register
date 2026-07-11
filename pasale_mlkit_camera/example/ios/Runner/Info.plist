@@ -7,7 +7,9 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Mlkit Camera Example</string>
+	<string>ML Kit Camera</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Camera is required for barcode scanning, text recognition, and object detection.</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
