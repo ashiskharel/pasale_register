@@ -42,4 +42,8 @@ class AppKeys {
   static const Key cartStatus = Key('cartStatus');
   static const Key paidCreditStatus = Key('paidCreditStatus');
   static const Key doneScanningButton = Key('doneScanningButton');
+
+  static const Key navToCameraScope = Key('navToCameraScope');
+  static const Key cameraScopeTier = Key('cameraScopeTier');
+  static const Key saveCameraScopeButton = Key('saveCameraScopeButton');
 }

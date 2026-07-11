@@ -66,13 +66,22 @@ Export batches from the example app wrap many results:
 - POST image to a separate vision API (custom segmentation, later roadmap).
 - Keep continuous store video on-prem; package default is on-device only.
 
-## Mapping to Pasale services
+## Mapping to Pasale services (implemented)
 
 | Pasale abstraction | mlkit_camera |
 |--------------------|--------------|
-| `ScannerService.scan()` | `results` first barcode / stream |
+| `MlkitScannerService` | Wraps shared `MlkitCameraController` |
+| `ScannerService.scan()` | First barcode/QR on `results` stream |
 | `ScannerService.buildScannerWidget()` | `MlkitCameraView` |
-| `CameraService.captureInvoicePhoto()` | `captureStill()` (+ optional OCR mode) |
-| Done Scanning / OK | `controller.stop()` |
+| `ScannerService.stopScanning()` | `controller.stop()` |
+| `ScannerService.applyCameraPolicy()` | `controller.updatePolicy()` |
+| `CameraService.captureInvoicePhoto()` | `controller.captureStill()` |
+| Superadmin **Cam Scope** tab | Firestore `stores/{id}/settings/cameraScope` |
 
-Pasale adapter code is intentionally **out of band** for package 0.1.0 so the package stays POS-agnostic.
+### Device smoke checklist
+
+1. Set `kUseFakeServices = false` in `pasale_register/lib/main.dart` (needs Firebase configured).
+2. Or keep fakes for UI flow tests without camera plugins.
+3. `flutter run` on a phone/emulator with camera.
+4. Activate store → Checkout → Scan Barcode → barcode/QR → Done Scanning.
+5. Cam Scope → Free/Premium toggles → Save → confirm policy JSON.

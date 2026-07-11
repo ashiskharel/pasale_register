@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:mlkit_camera/mlkit_camera.dart';
 import 'package:pasale_register/services/scanner_service.dart';
 
 class FakeScannerService implements ScannerService {
@@ -9,6 +10,8 @@ class FakeScannerService implements ScannerService {
   String? errorToThrow;
   bool returnNull = false;
   bool throwFeedbackError = false;
+  CameraScopePolicy _policy = CameraScopePolicy.freeDefault();
+  int stopCount = 0;
 
   // Stream getter/helper to push mock barcodes
   StreamController<String> get barcodeController => _barcodeController;
@@ -51,4 +54,17 @@ class FakeScannerService implements ScannerService {
       child: const Text('Fake Camera Active', style: TextStyle(color: Colors.white)),
     );
   }
+
+  @override
+  Future<void> stopScanning() async {
+    stopCount++;
+  }
+
+  @override
+  Future<void> applyCameraPolicy(CameraScopePolicy policy) async {
+    _policy = policy;
+  }
+
+  @override
+  CameraScopePolicy get cameraPolicy => _policy;
 }

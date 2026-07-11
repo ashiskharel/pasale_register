@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/services.dart';
+import 'package:mlkit_camera/mlkit_camera.dart';
 import 'package:pasale_register/models/product.dart';
 import 'package:pasale_register/models/store.dart';
 import 'package:pasale_register/models/device.dart';
@@ -13,6 +14,7 @@ class FakeFirestoreService implements FirestoreService {
   final Map<String, String> _stores = {};
   final Map<String, Map<String, Map<String, dynamic>>> _devices = {};
   final Map<String, Product> _products = {};
+  final Map<String, CameraScopePolicy> _cameraScopes = {};
   bool checkStoreActivation = false;
   bool _seeded = false;
   Future<void>? _seedingFuture;
@@ -146,4 +148,18 @@ class FakeFirestoreService implements FirestoreService {
 
     return controller.stream;
   }
+
+  @override
+  Future<CameraScopePolicy> getCameraScope(String storeId) async {
+    return _cameraScopes[storeId] ??
+        CameraScopePolicy.freeDefault(updatedBy: 'fake');
+  }
+
+  @override
+  Future<void> saveCameraScope(String storeId, CameraScopePolicy policy) async {
+    _cameraScopes[storeId] = policy;
+  }
+
+  /// Test helper
+  Map<String, CameraScopePolicy> get cameraScopes => _cameraScopes;
 }

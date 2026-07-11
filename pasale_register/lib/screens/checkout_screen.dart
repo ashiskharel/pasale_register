@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../constants/keys.dart';
-import '../models/product.dart';
 import '../models/cart_item.dart';
 import '../services/service_locator.dart';
 import '../services/firestore_service.dart';
@@ -274,11 +273,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                       const SizedBox(height: 10),
                       ElevatedButton(
                         key: AppKeys.doneScanningButton,
-                        onPressed: () {
+                        onPressed: () async {
                           setState(() {
                             _isScanning = false;
                             _status = 'Scanning stopped';
                           });
+                          await locator<ScannerService>().stopScanning();
                         },
                         child: const Text('Done Scanning / OK'),
                       ),

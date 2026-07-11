@@ -15,12 +15,13 @@ dependencies:
   share_plus: any
   vibration: any
   camera: any
-  mobile_scanner: any
   audioplayers: any
   path_provider: any
   uuid: any
   device_info_plus: any
   shared_preferences: any
+  mlkit_camera:
+    path: ../pasale_mlkit_camera/packages/mlkit_camera
 
 dev_dependencies:
   flutter_test:
