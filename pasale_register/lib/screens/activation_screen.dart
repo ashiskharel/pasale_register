@@ -139,15 +139,17 @@ class _ActivationScreenState extends State<ActivationScreen> {
       });
       return;
     }
-    if (!RegExp(r'^[a-zA-Z0-9]+$').hasMatch(storeId)) {
+    if (!RegExp(r'^[a-zA-Z0-9_-]+$').hasMatch(storeId)) {
       setState(() {
-        _status = 'Error: Store ID must be alphanumeric';
+        _status =
+            'Error: Store ID may only use letters, numbers, _ and - (no spaces)';
       });
       return;
     }
     try {
+      setState(() => _status = 'Activating store…');
       await locator<FirestoreService>().activateStore(storeId, storeName);
-      
+
       final deviceId = _deviceIdController.text.trim();
       final metadataStr = _deviceMetadataController.text.trim();
       Map<String, dynamic> metadata = {};
@@ -158,7 +160,14 @@ class _ActivationScreenState extends State<ActivationScreen> {
           metadata = {'raw': metadataStr};
         }
       }
-      await locator<FirestoreService>().registerDevice(storeId, deviceId, metadata);
+      metadata['platform'] = kIsWeb
+          ? 'web'
+          : (Platform.isAndroid
+              ? 'android'
+              : (Platform.isIOS ? 'ios' : 'other'));
+
+      await locator<FirestoreService>()
+          .registerDevice(storeId, deviceId, metadata);
 
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('storeId', storeId);
@@ -173,9 +182,31 @@ class _ActivationScreenState extends State<ActivationScreen> {
       widget.onActivated?.call();
     } catch (e) {
       setState(() {
-        _status = 'Error: $e';
+        _status = _friendlyError(e);
       });
     }
+  }
+
+  String _friendlyError(Object e) {
+    final s = e.toString();
+    if (s.contains('permission-denied') || s.contains('PERMISSION_DENIED')) {
+      return 'Error: Firestore permission denied.\n'
+          'In Firebase Console → Firestore: create the database if missing, '
+          'then set rules to allow write (or deploy firestore.rules from the repo).';
+    }
+    if (s.contains('not-found') ||
+        s.contains('NOT_FOUND') ||
+        s.contains('does not exist')) {
+      return 'Error: Firestore database not found.\n'
+          'Console → Build → Firestore Database → Create database.';
+    }
+    if (s.contains('unavailable') || s.contains('UNAVAILABLE')) {
+      return 'Error: Cannot reach Firestore. Check internet / VPN.';
+    }
+    if (s.contains('cloud_firestore') || s.contains('FirebaseException')) {
+      return 'Error (Firestore): $e';
+    }
+    return 'Error: $e';
   }
 
   Future<void> _register() async {
@@ -197,7 +228,9 @@ class _ActivationScreenState extends State<ActivationScreen> {
       }
     }
     try {
-      await locator<FirestoreService>().registerDevice(storeId, deviceId, metadata);
+      setState(() => _status = 'Registering device…');
+      await locator<FirestoreService>()
+          .registerDevice(storeId, deviceId, metadata);
 
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('storeId', storeId);
@@ -211,7 +244,7 @@ class _ActivationScreenState extends State<ActivationScreen> {
       widget.onActivated?.call();
     } catch (e) {
       setState(() {
-        _status = 'Error: $e';
+        _status = _friendlyError(e);
       });
     }
   }

@@ -64,13 +64,12 @@ class DefaultFirebaseOptions {
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'YOUR_ANDROID_API_KEY',
-    appId: 'YOUR_ANDROID_APP_ID',
-    messagingSenderId: 'YOUR_SENDER_ID',
-    projectId: 'YOUR_PROJECT_ID',
-    storageBucket: 'YOUR_PROJECT_ID.appspot.com',
+    apiKey: 'AIzaSyCcWXicFcXvrBCY1JJGv7alm7DYcj5pzd8',
+    appId: '1:455280907863:android:f45d64404a563fe7dc3512',
+    messagingSenderId: '455280907863',
+    projectId: 'pasal-b84c5',
+    storageBucket: 'pasal-b84c5.firebasestorage.app',
   );
-
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'YOUR_IOS_API_KEY',
     appId: 'YOUR_IOS_APP_ID',

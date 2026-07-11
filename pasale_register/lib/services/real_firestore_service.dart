@@ -4,6 +4,7 @@ import 'package:mlkit_camera/mlkit_camera.dart';
 import '../models/device.dart';
 import '../models/product.dart';
 import '../models/store.dart';
+import 'firestore_seed.dart';
 import 'firestore_service.dart';
 
 /// Production Firestore access. Paths and fields match [docs/FIRESTORE_SCHEMA.md].
@@ -12,6 +13,7 @@ class RealFirestoreService implements FirestoreService {
       : _firestore = firestore ?? FirebaseFirestore.instance;
 
   final FirebaseFirestore _firestore;
+  Future<void>? _seedFuture;
 
   DocumentReference<Map<String, dynamic>> _cameraScopeRef(String storeId) {
     return _firestore
@@ -31,6 +33,10 @@ class RealFirestoreService implements FirestoreService {
     return _firestore.collection('products');
   }
 
+  Future<void> _ensureSeeded() {
+    return _seedFuture ??= seedGlobalProductsIfEmpty(_firestore);
+  }
+
   Map<String, dynamic> _withServerTimes(
     Map<String, dynamic> data, {
     bool isCreate = false,
@@ -45,6 +51,7 @@ class RealFirestoreService implements FirestoreService {
 
   @override
   Future<void> activateStore(String storeId, String storeName) async {
+    await _ensureSeeded();
     final store = Store(
       storeId: storeId,
       name: storeName,
@@ -63,7 +70,6 @@ class RealFirestoreService implements FirestoreService {
     );
     await ref.set(payload, SetOptions(merge: true));
 
-    // Ensure default camera scope exists for the store.
     final scopeRef = _cameraScopeRef(storeId);
     final scopeDoc = await scopeRef.get();
     if (!scopeDoc.exists) {
@@ -107,6 +113,7 @@ class RealFirestoreService implements FirestoreService {
 
   @override
   Future<Product?> getProduct(String id, {String? storeId}) async {
+    await _ensureSeeded();
     if (storeId != null && storeId.isNotEmpty) {
       final storeDoc = await _productsCol(storeId).doc(id).get();
       if (storeDoc.exists && storeDoc.data() != null) {
@@ -130,7 +137,6 @@ class RealFirestoreService implements FirestoreService {
       {
         ...toSave.toMap(),
         'isActive': true,
-        // Keep imageUrl key present for Storage uploads later.
         'imageUrl': toSave.imagePath != null &&
                 (toSave.imagePath!.startsWith('http://') ||
                     toSave.imagePath!.startsWith('https://'))
@@ -139,7 +145,6 @@ class RealFirestoreService implements FirestoreService {
       },
       isCreate: !existing.exists,
     );
-    // Drop null imageUrl so we don't wipe existing cloud URLs on merge.
     if (payload['imageUrl'] == null) {
       payload.remove('imageUrl');
     }
@@ -148,17 +153,45 @@ class RealFirestoreService implements FirestoreService {
 
   @override
   Stream<List<Product>> streamCatalog({String? storeId}) {
-    return _productsCol(storeId).snapshots().map((snapshot) {
-      return snapshot.docs
-          .where((doc) => doc.data()['isActive'] != false)
-          .map((doc) => Product.fromMap(doc.data(), doc.id))
-          .toList();
+    // Kick off seed (non-blocking); first snapshots may be empty briefly.
+    _ensureSeeded();
+
+    if (storeId == null || storeId.isEmpty) {
+      return _productsCol(null).snapshots().map((snapshot) {
+        return snapshot.docs
+            .where((doc) => doc.data()['isActive'] != false)
+            .map((doc) => Product.fromMap(doc.data(), doc.id))
+            .toList();
+      });
+    }
+
+    // Merge store-specific products over global seed catalog.
+    return _productsCol(storeId).snapshots().asyncMap((storeSnap) async {
+      await _ensureSeeded();
+      final globalSnap = await _firestore.collection('products').get();
+      final byId = <String, Product>{};
+      for (final doc in globalSnap.docs) {
+        if (doc.data()['isActive'] == false) continue;
+        byId[doc.id] = Product.fromMap(doc.data(), doc.id);
+      }
+      for (final doc in storeSnap.docs) {
+        if (doc.data()['isActive'] == false) continue;
+        byId[doc.id] = Product.fromMap(doc.data(), doc.id);
+      }
+      final list = byId.values.toList()
+        ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+      return list;
     });
   }
 
   Map<String, dynamic> _normalizeJsonTimestamps(Map<String, dynamic> raw) {
     final data = Map<String, dynamic>.from(raw);
-    for (final key in ['updatedAt', 'createdAt', 'activationDate', 'lastActive']) {
+    for (final key in [
+      'updatedAt',
+      'createdAt',
+      'activationDate',
+      'lastActive',
+    ]) {
       final v = data[key];
       if (v is Timestamp) {
         data[key] = v.toDate().toUtc().toIso8601String();
@@ -187,7 +220,6 @@ class RealFirestoreService implements FirestoreService {
     await _cameraScopeRef(storeId).set(data, SetOptions(merge: true));
   }
 
-  /// Optional: persist a completed checkout for analytics / history.
   Future<void> saveSale({
     required String storeId,
     required String saleId,
