@@ -258,7 +258,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                           key: const Key('scanPreview'),
                           width: double.infinity,
                           margin: const EdgeInsets.all(8.0),
-                          color: Colors.black,
+                          decoration: const BoxDecoration(color: Colors.black),
                           clipBehavior: Clip.hardEdge,
                           child: locator<ScannerService>().buildScannerWidget(),
                         ),
