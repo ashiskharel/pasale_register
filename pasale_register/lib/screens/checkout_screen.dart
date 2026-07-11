@@ -253,12 +253,15 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Container(
-                        key: const Key('scanPreview'),
-                        height: 250,
-                        margin: const EdgeInsets.all(8.0),
-                        color: Colors.black,
-                        child: locator<ScannerService>().buildScannerWidget(),
+                      Expanded(
+                        child: Container(
+                          key: const Key('scanPreview'),
+                          width: double.infinity,
+                          margin: const EdgeInsets.all(8.0),
+                          color: Colors.black,
+                          clipBehavior: Clip.hardEdge,
+                          child: locator<ScannerService>().buildScannerWidget(),
+                        ),
                       ),
                       const SizedBox(height: 10),
                       if (_status.isNotEmpty)

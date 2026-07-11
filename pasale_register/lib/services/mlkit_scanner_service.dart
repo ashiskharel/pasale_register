@@ -21,6 +21,7 @@ class MlkitScannerService implements ScannerService {
   StreamController<String>? _barcodeOut;
   StreamSubscription<VisionResult>? _resultsSub;
   bool _wired = false;
+  Future<void>? _sessionFuture;
 
   MlkitCameraController get controller => _controller;
 
@@ -35,19 +36,35 @@ class MlkitScannerService implements ScannerService {
       for (final hit in result.barcodes) {
         final raw = hit.rawValue.trim();
         if (raw.isNotEmpty) {
+          debugPrint('MlkitScannerService: barcode $raw');
           _barcodeOut?.add(raw);
         }
       }
     });
   }
 
-  Future<void> _ensureSession() async {
+  /// Opens camera (with permission) and starts barcode/QR stream once.
+  Future<void> ensureSession() {
+    _sessionFuture ??= _openSession().whenComplete(() {
+      // Allow retry after failure / stop.
+      if (!_controller.isRunning) {
+        _sessionFuture = null;
+      }
+    });
+    return _sessionFuture!;
+  }
+
+  Future<void> _openSession() async {
     _ensureWired();
     if (!_controller.isInitialized) {
       await _controller.initialize();
     }
+    if (!_controller.isInitialized) {
+      throw StateError(
+        _controller.error ?? 'Camera failed to initialize',
+      );
+    }
     if (!_controller.isRunning) {
-      // Prefer barcode/QR; fall back to policy default if somehow locked.
       final mode = _controller.policy.allowsMode(CameraVisionMode.barcodeQr)
           ? CameraVisionMode.barcodeQr
           : _controller.policy.defaultMode;
@@ -57,7 +74,7 @@ class MlkitScannerService implements ScannerService {
 
   @override
   Future<String?> scan() async {
-    await _ensureSession();
+    await ensureSession();
     return _barcodeOut!.stream.first;
   }
 
@@ -75,29 +92,13 @@ class MlkitScannerService implements ScannerService {
 
   @override
   Widget buildScannerWidget() {
-    return FutureBuilder<void>(
-      future: _ensureSession(),
-      builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          return Center(
-            child: Text(
-              'Camera error: ${snapshot.error}',
-              style: const TextStyle(color: Colors.white),
-              textAlign: TextAlign.center,
-            ),
-          );
-        }
-        return MlkitCameraView(
-          controller: _controller,
-          key: const Key('scanPreview'),
-        );
-      },
-    );
+    return _PasaleScannerPreview(service: this);
   }
 
   @override
   Future<void> stopScanning() async {
     await _controller.stop();
+    _sessionFuture = null;
   }
 
   @override
@@ -111,5 +112,64 @@ class MlkitScannerService implements ScannerService {
     await _audioPlayer.dispose();
     await _controller.close();
     _controller.dispose();
+  }
+}
+
+/// Stateful preview so camera init runs once and rebuilds when ready.
+class _PasaleScannerPreview extends StatefulWidget {
+  const _PasaleScannerPreview({required this.service});
+
+  final MlkitScannerService service;
+
+  @override
+  State<_PasaleScannerPreview> createState() => _PasaleScannerPreviewState();
+}
+
+class _PasaleScannerPreviewState extends State<_PasaleScannerPreview> {
+  late Future<void> _ready;
+  late final VoidCallback _listener;
+
+  @override
+  void initState() {
+    super.initState();
+    _ready = widget.service.ensureSession();
+    _listener = () {
+      if (mounted) setState(() {});
+    };
+    widget.service.controller.addListener(_listener);
+  }
+
+  @override
+  void dispose() {
+    widget.service.controller.removeListener(_listener);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<void>(
+      future: _ready,
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return ColoredBox(
+            color: Colors.black,
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Text(
+                  'Camera error:\n${snapshot.error}',
+                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ),
+          );
+        }
+        return MlkitCameraView(
+          controller: widget.service.controller,
+          showOverlay: true,
+        );
+      },
+    );
   }
 }

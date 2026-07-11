@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import 'models/camera_scope_policy.dart';
 import 'models/camera_vision_mode.dart';
@@ -15,19 +17,12 @@ import 'utils/barcode_debounce.dart';
 import 'utils/frame_throttle.dart';
 
 /// Lifecycle + ML Kit processing for a continuous camera session.
-///
-/// **Scope:** [policy] (from superadmin / plan tier) decides which modes may
-/// run. Free default is barcode + QR only; premium unlocks object detection
-/// and batch checkout (segmentation path later).
-///
-/// Host UI owns Start / Done controls. Camera stays active until [stop] or
-/// [dispose]. Results are pushed on [results].
 class MlkitCameraController extends ChangeNotifier {
   MlkitCameraController({
     CameraScopePolicy? policy,
     this.barcodeDebounceWindow = const Duration(seconds: 2),
     this.processInterval = const Duration(milliseconds: 250),
-    this.resolution = ResolutionPreset.high,
+    this.resolution = ResolutionPreset.medium,
     this.enableAudio = false,
     BarcodeProcessor? barcodeProcessor,
     TextProcessor? textProcessor,
@@ -62,12 +57,14 @@ class MlkitCameraController extends ChangeNotifier {
   bool _running = false;
   bool _busy = false;
   bool _disposed = false;
+  bool _initializing = false;
+  Future<void>? _initFuture;
   int _multiPhase = 0;
   VisionResult? _lastMulti;
   String? _error;
   DeviceOrientation _orientation = DeviceOrientation.portraitUp;
+  int _dropLogCount = 0;
 
-  /// Live detection stream (debounced barcodes/QR; throttled OCR/objects).
   Stream<VisionResult> get results => _resultsController.stream;
 
   CameraController? get cameraController => _camera;
@@ -76,13 +73,10 @@ class MlkitCameraController extends ChangeNotifier {
   Set<CameraVisionMode> get allowedModes => _policy.allowedModes;
   bool get isRunning => _running;
   bool get isInitialized => _camera?.value.isInitialized ?? false;
+  bool get isInitializing => _initializing;
   String? get error => _error;
   VisionResult? get lastMultiSnapshot => _lastMulti;
 
-  /// Superadmin (or backend sync) updates camera scope at runtime.
-  ///
-  /// If the current mode is no longer allowed, falls back to [CameraScopePolicy.defaultMode]
-  /// and restarts the stream when running.
   Future<void> updatePolicy(CameraScopePolicy policy) async {
     if (_disposed) return;
     _policy = policy;
@@ -97,17 +91,37 @@ class MlkitCameraController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Initialize the first available camera (back preferred) without starting
-  /// the image stream. Safe to call from app startup.
+  /// Request camera permission, open device camera (back preferred).
   Future<void> initialize({
     CameraLensDirection prefer = CameraLensDirection.back,
+  }) {
+    if (_disposed) return Future.value();
+    if (isInitialized) return Future.value();
+    _initFuture ??= _doInitialize(prefer: prefer);
+    return _initFuture!.whenComplete(() {
+      _initFuture = null;
+    });
+  }
+
+  Future<void> _doInitialize({
+    required CameraLensDirection prefer,
   }) async {
-    if (_disposed) return;
+    if (_disposed || isInitialized) return;
+    _initializing = true;
+    _error = null;
+    notifyListeners();
+
     try {
+      final permitted = await _ensureCameraPermission();
+      if (!permitted) {
+        _error =
+            'Camera permission denied. Enable Camera in system settings for Pasale Register.';
+        return;
+      }
+
       final cameras = await availableCameras();
       if (cameras.isEmpty) {
-        _error = 'No cameras available';
-        notifyListeners();
+        _error = 'No cameras available on this device.';
         return;
       }
       _description = cameras.firstWhere(
@@ -115,29 +129,73 @@ class MlkitCameraController extends ChangeNotifier {
         orElse: () => cameras.first,
       );
       await _createCamera();
-      _error = null;
+      if (isInitialized) {
+        _error = null;
+        debugPrint(
+          'MlkitCameraController: ready '
+          '${_description?.name} '
+          'preview=${_camera?.value.previewSize}',
+        );
+      }
     } catch (e, st) {
       _error = 'Camera init failed: $e';
       debugPrint('MlkitCameraController.initialize: $e\n$st');
+      await _camera?.dispose();
+      _camera = null;
+    } finally {
+      _initializing = false;
+      notifyListeners();
     }
-    notifyListeners();
+  }
+
+  Future<bool> _ensureCameraPermission() async {
+    var status = await Permission.camera.status;
+    if (status.isGranted) return true;
+    if (status.isPermanentlyDenied) {
+      // User must open settings; still try request once.
+      await openAppSettings();
+      status = await Permission.camera.status;
+      return status.isGranted;
+    }
+    status = await Permission.camera.request();
+    return status.isGranted;
   }
 
   Future<void> _createCamera() async {
     final desc = _description;
     if (desc == null) return;
     final previous = _camera;
-    _camera = CameraController(
-      desc,
-      resolution,
-      enableAudio: enableAudio,
-      imageFormatGroup: ImageFormatGroup.nv21,
-    );
-    await _camera!.initialize();
-    await previous?.dispose();
+
+    // Prefer formats that work for both preview + ML Kit on each platform.
+    final formats = <ImageFormatGroup>[
+      if (Platform.isAndroid) ImageFormatGroup.nv21,
+      if (Platform.isAndroid) ImageFormatGroup.yuv420,
+      if (Platform.isIOS) ImageFormatGroup.bgra8888,
+      ImageFormatGroup.yuv420,
+    ];
+
+    Object? lastError;
+    for (final format in formats) {
+      try {
+        final next = CameraController(
+          desc,
+          resolution,
+          enableAudio: enableAudio,
+          imageFormatGroup: format,
+        );
+        await next.initialize();
+        _camera = next;
+        await previous?.dispose();
+        debugPrint('MlkitCameraController: using imageFormatGroup=$format');
+        return;
+      } catch (e) {
+        lastError = e;
+        debugPrint('MlkitCameraController: format $format failed: $e');
+      }
+    }
+    throw lastError ?? Exception('Unable to open camera');
   }
 
-  /// Start continuous processing in [mode] if allowed by [policy].
   Future<void> start({CameraVisionMode? mode}) async {
     if (_disposed) return;
     final requested = mode ?? _policy.defaultMode;
@@ -155,7 +213,9 @@ class MlkitCameraController extends ChangeNotifier {
     if (!isInitialized) return;
 
     if (_running) {
-      await stop();
+      // Already streaming — just switch mode bookkeeping.
+      notifyListeners();
+      return;
     }
 
     _running = true;
@@ -164,10 +224,13 @@ class MlkitCameraController extends ChangeNotifier {
     _multiPhase = 0;
     _lastMulti = null;
     _error = null;
+    _dropLogCount = 0;
     notifyListeners();
 
     try {
-      await _camera!.startImageStream(_onFrame);
+      if (!_camera!.value.isStreamingImages) {
+        await _camera!.startImageStream(_onFrame);
+      }
     } catch (e, st) {
       _error = 'Failed to start image stream: $e';
       _running = false;
@@ -176,7 +239,6 @@ class MlkitCameraController extends ChangeNotifier {
     }
   }
 
-  /// Stop the image stream (maps to "Done Scanning / OK"). Preview may remain.
   Future<void> stop() async {
     if (!_running) return;
     _running = false;
@@ -230,7 +292,6 @@ class MlkitCameraController extends ChangeNotifier {
     if (wasRunning) await start(mode: _mode);
   }
 
-  /// Capture a still image path (invoice / tray photo). Stops stream first.
   Future<String?> captureStill() async {
     final cam = _camera;
     if (cam == null || !cam.value.isInitialized) return null;
@@ -255,16 +316,24 @@ class MlkitCameraController extends ChangeNotifier {
     if (!_running || _busy || _disposed) return;
     if (!_throttle.allow()) return;
 
-    final cam = _camera;
     final desc = _description;
-    if (cam == null || desc == null) return;
+    if (desc == null) return;
 
     final input = inputImageFromCameraImage(
       image: image,
       camera: desc,
       deviceOrientation: _orientation,
     );
-    if (input == null) return;
+    if (input == null) {
+      if (_dropLogCount < 5) {
+        _dropLogCount++;
+        debugPrint(
+          'MlkitCameraController: dropped frame '
+          '(format=${image.format.raw} planes=${image.planes.length})',
+        );
+      }
+      return;
+    }
 
     _busy = true;
     try {
@@ -309,8 +378,6 @@ class MlkitCameraController extends ChangeNotifier {
           objects: objs,
         );
       case CameraVisionMode.batchCheckout:
-        // Premium path stub: rotate barcode/QR + objects.
-        // Later: trained segmentation model → instance masks → SKU match.
         final phase = _multiPhase % 2;
         _multiPhase++;
         late VisionResult partial;
@@ -337,7 +404,6 @@ class MlkitCameraController extends ChangeNotifier {
     }
   }
 
-  /// Async resource cleanup. Prefer calling this before [dispose] when possible.
   Future<void> close() async {
     if (_disposed) return;
     await stop();
