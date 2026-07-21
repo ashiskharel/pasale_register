@@ -6,10 +6,12 @@ Pasale Register is a comprehensive mobile point-of-sale system for small retail 
 
 Check out our video tutorial:
 
-<video width="100%" controls>
-  <source src="tutorial.mp4" type="video/mp4">
-  Your browser does not support the video tag.
-</video>
+<div style="max-width: 350px; margin: 20px auto; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
+  <video width="100%" controls preload="metadata" style="display: block;">
+    <source src="tutorial.mp4" type="video/mp4">
+    Your browser does not support the video tag.
+  </video>
+</div>
 
 ## Features
 
