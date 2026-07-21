@@ -5,7 +5,11 @@ Pasale Register is a comprehensive mobile point-of-sale system for small retail 
 ## Tutorial
 
 Check out our video tutorial:
-[Pasale Tutorial (Click to Download/Play)](tutorial.mp4)
+
+<video width="100%" controls>
+  <source src="tutorial.mp4" type="video/mp4">
+  Your browser does not support the video tag.
+</video>
 
 ## Features
 
