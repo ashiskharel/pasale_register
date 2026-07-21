@@ -12,6 +12,15 @@ class Product {
   /// Local file path or remote URL of the product photo.
   final String? imagePath;
 
+  /// Free-text notes (e.g. OCR expiry / price-tag snippets) for training.
+  final String? notes;
+
+  /// Current physical stock quantity of the product in this store.
+  final double quantity;
+
+  /// Vendors who supply this product, if explicitly assigned.
+  final List<String>? vendorIds;
+
   Product({
     required this.id,
     required this.name,
@@ -19,8 +28,11 @@ class Product {
     required this.sellingPrice,
     required this.costPrice,
     required this.markup,
+    this.quantity = 0.0,
     this.storeId,
     this.imagePath,
+    this.notes,
+    this.vendorIds,
   });
 
   Product copyWith({
@@ -30,9 +42,13 @@ class Product {
     double? sellingPrice,
     double? costPrice,
     double? markup,
+    double? quantity,
     String? storeId,
     String? imagePath,
+    String? notes,
+    List<String>? vendorIds,
     bool clearImage = false,
+    bool clearNotes = false,
   }) {
     return Product(
       id: id ?? this.id,
@@ -41,8 +57,11 @@ class Product {
       sellingPrice: sellingPrice ?? this.sellingPrice,
       costPrice: costPrice ?? this.costPrice,
       markup: markup ?? this.markup,
+      quantity: quantity ?? this.quantity,
       storeId: storeId ?? this.storeId,
       imagePath: clearImage ? null : (imagePath ?? this.imagePath),
+      notes: clearNotes ? null : (notes ?? this.notes),
+      vendorIds: vendorIds ?? this.vendorIds,
     );
   }
 
@@ -54,21 +73,28 @@ class Product {
       'sellingPrice': sellingPrice,
       'costPrice': costPrice,
       'markup': markup,
+      'quantity': quantity,
       if (storeId != null) 'storeId': storeId,
       if (imagePath != null) 'imagePath': imagePath,
+      if (notes != null && notes!.isNotEmpty) 'notes': notes,
+      if (vendorIds != null && vendorIds!.isNotEmpty) 'vendorIds': vendorIds,
     };
   }
 
   factory Product.fromMap(Map<String, dynamic> map, String id) {
     return Product(
       id: id,
-      name: map['name'] as String? ?? '',
-      barcode: map['barcode'] as String? ?? '',
+      name: map['name']?.toString() ?? '',
+      barcode: map['barcode']?.toString() ?? '',
       sellingPrice: (map['sellingPrice'] as num? ?? 0.0).toDouble(),
       costPrice: (map['costPrice'] as num? ?? 0.0).toDouble(),
       markup: (map['markup'] as num? ?? 0.0).toDouble(),
+      quantity: (map['quantity'] as num? ?? 0.0).toDouble(),
       storeId: map['storeId'] as String?,
       imagePath: map['imagePath'] as String? ?? map['imageUrl'] as String?,
+      notes: map['notes'] as String?,
+      vendorIds: (map['vendorIds'] as List?)?.map((e) => e as String).toList() ?? 
+                 (map['vendorId'] != null ? [map['vendorId'] as String] : null),
     );
   }
 }

@@ -9,20 +9,36 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_localizations:
+    sdk: flutter
   firebase_core: any
+  firebase_auth: any
   cloud_firestore: any
+  flutter_facebook_auth: ^7.1.1
   get_it: any
-  share_plus: any
+  # ≥13.2.0: Built-in Kotlin (AGP 9 / Flutter 3.44)
+  share_plus: ^13.2.0
   vibration: any
-  camera: any
-  audioplayers: any
+  # With camera_android_camerax ≥0.7.2+1 (Built-in Kotlin)
+  camera: ^0.12.0
+  camera_android_camerax: ^0.7.2+1
+  # 6.8.0+ claims Built-in Kotlin compatibility; pin explicit.
+  audioplayers: ^6.8.0
   path_provider: any
   uuid: any
   device_info_plus: any
   shared_preferences: any
   mlkit_camera:
     path: ../pasale_mlkit_camera/packages/mlkit_camera
-
+  google_mlkit_text_recognition: any
+  google_mlkit_commons: any
+  http: any
+  speech_to_text: any
+  flutter_tts: any
+  firebase_remote_config: ^6.5.5
+  in_app_update: ^5.0.0
+  firebase_storage: ^13.4.5
+  # Landing uses static poster only to keep APK small
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -36,3 +52,8 @@ flutter:
   assets:
     - assets/seeded_products.json
     - assets/beep.mp3
+    # Explicit brand files — do NOT bundle the ~9.5MB mp4 (use poster instead).
+    - assets/brand/pasale_p_logo_icon.jpg
+    - assets/brand/pasale_digitally_empowering_scene.jpg
+    # Optional: re-add after compressing to <1MB for marketing builds:
+    # - assets/brand/pasale_digitally_empowering.mp4

@@ -148,18 +148,34 @@ class MlkitCameraController extends ChangeNotifier {
     }
   }
 
+  /// Request camera permission without jumping to system Settings.
+  ///
+  /// Previously we called [openAppSettings] on permanently-denied, which sent
+  /// users to the Android App Info page the moment they tapped Open Scanner.
+  /// Now we only request the system dialog; Settings is opened only when the
+  /// user taps an explicit "Open settings" control in the UI.
   Future<bool> _ensureCameraPermission() async {
     var status = await Permission.camera.status;
-    if (status.isGranted) return true;
-    if (status.isPermanentlyDenied) {
-      // User must open settings; still try request once.
-      await openAppSettings();
-      status = await Permission.camera.status;
-      return status.isGranted;
-    }
+    if (status.isGranted || status.isLimited) return true;
+
+    // Always try the system prompt first (covers first-run + denied-once).
     status = await Permission.camera.request();
-    return status.isGranted;
+    if (status.isGranted || status.isLimited) return true;
+
+    if (status.isPermanentlyDenied || status.isRestricted) {
+      _error =
+          'Camera access is blocked. Tap Open settings, enable Camera for '
+          'Pasale Register, then return and try again.';
+    } else {
+      _error =
+          'Camera permission is required to scan. Tap Allow when prompted, '
+          'or Open settings if the prompt does not appear.';
+    }
+    return false;
   }
+
+  /// Opens the OS app settings page (user-initiated only).
+  Future<bool> openSystemAppSettings() => openAppSettings();
 
   Future<void> _createCamera() async {
     final desc = _description;
@@ -206,18 +222,26 @@ class MlkitCameraController extends ChangeNotifier {
       notifyListeners();
       return;
     }
-    _mode = requested;
     if (!isInitialized) {
       await initialize();
     }
     if (!isInitialized) return;
 
+    // Switching mode while already streaming: update processor without
+    // restarting the camera (setMode also handles stop/start when needed).
     if (_running) {
-      // Already streaming — just switch mode bookkeeping.
+      if (_mode != requested) {
+        _mode = requested;
+        _barcode.resetDebounce();
+        _multiPhase = 0;
+        _lastMulti = null;
+        debugPrint('MlkitCameraController: live mode → ${requested.name}');
+      }
       notifyListeners();
       return;
     }
 
+    _mode = requested;
     _running = true;
     _throttle.reset();
     _barcode.resetDebounce();
@@ -231,6 +255,7 @@ class MlkitCameraController extends ChangeNotifier {
       if (!_camera!.value.isStreamingImages) {
         await _camera!.startImageStream(_onFrame);
       }
+      debugPrint('MlkitCameraController: stream started mode=${_mode.name}');
     } catch (e, st) {
       _error = 'Failed to start image stream: $e';
       _running = false;
@@ -292,19 +317,48 @@ class MlkitCameraController extends ChangeNotifier {
     if (wasRunning) await start(mode: _mode);
   }
 
-  Future<String?> captureStill() async {
+  /// Capture a JPEG still.
+  ///
+  /// [resumeStream] — when true (default), restarts the vision image stream
+  /// if it was running. Use `false` for product-photo capture inside a dialog
+  /// so the live [CameraPreview] stays available without ML processing.
+  Future<String?> captureStill({bool resumeStream = true}) async {
+    if (!isInitialized) {
+      await initialize();
+    }
     final cam = _camera;
-    if (cam == null || !cam.value.isInitialized) return null;
+    if (cam == null || !cam.value.isInitialized) {
+      debugPrint('captureStill: camera not initialized');
+      return null;
+    }
     final wasRunning = _running;
     if (wasRunning) await stop();
+    // stopImageStream can leave the controller briefly busy; brief pause helps
+    // takePicture on some Android devices.
+    if (wasRunning) {
+      await Future<void>.delayed(const Duration(milliseconds: 120));
+    }
     try {
       final file = await cam.takePicture();
+      debugPrint('captureStill: saved ${file.path}');
       return file.path;
     } catch (e) {
       debugPrint('captureStill: $e');
       return null;
     } finally {
-      if (wasRunning) await start(mode: _mode);
+      if (resumeStream && wasRunning && !_disposed) {
+        await start(mode: _mode);
+      }
+    }
+  }
+
+  /// Stop ML image stream but keep the camera open for [CameraPreview] / stills.
+  Future<void> preparePreviewOnly() async {
+    if (!isInitialized) {
+      await initialize();
+    }
+    if (_running) {
+      await stop();
     }
   }
 

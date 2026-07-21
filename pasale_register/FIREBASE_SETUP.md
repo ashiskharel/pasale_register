@@ -1,6 +1,7 @@
 # Firebase + Firestore setup (Pasale Register)
 
-Full field reference: **[docs/FIRESTORE_SCHEMA.md](docs/FIRESTORE_SCHEMA.md)**
+Full field reference: **[docs/FIRESTORE_SCHEMA.md](docs/FIRESTORE_SCHEMA.md)**  
+**Phone OTP + Facebook Auth:** **[docs/AUTH_SETUP.md](docs/AUTH_SETUP.md)**
 
 ---
 
@@ -52,10 +53,14 @@ Then:
 ```powershell
 flutter clean
 flutter pub get
+# Dev Firebase project (default):
 flutter run
+# Production Firebase project (separate DB):
+flutter run --dart-define=ENV=Prod
 ```
 
-Banner should show: **Firebase · real camera**
+Banner should show: **Firebase · real camera**.  
+`ENV` selects `firebase_options_dev.dart` vs `firebase_options_prod.dart` (`Prod` / `prod` / `PROD` all map to production).
 
 ---
 
@@ -92,11 +97,49 @@ stores/{storeId}
     imagePath?, imageUrl?, isActive, unit?, notes?, createdAt, updatedAt
   settings/cameraScope
     tier, enabled[], updatedBy?, updatedAt, notes?
-  sales/{saleId}   (optional history)
+  sales/{saleId}   (legacy mirror of checkouts)
     saleId, storeId, totalPrice, isPaid, items[], customerPhone?, deviceId?, status, createdAt
+  invoices/{invoiceId}   # POS history (Dashboard, View Invoices, Customers)
+    id, storeId, total, payment (cash|credit), source (cart|manual),
+    customerPhone?, customerName?, customerEmail?, lineSummary[], notes?,
+    createdAt (ISO string), createdAtTs (Timestamp), isPaid
+  customers/{phone}      # rolled up from invoices
+    phone, name, email?, creditBalance, lastActivityAt, transactionCount
 
 products/{barcode}   # global seed fallback (same product fields)
 ```
+
+### Invoices & customers (so records show while testing)
+
+After checkout / manual invoice, the app writes to:
+
+- `stores/{yourStoreId}/invoices/{id}`
+- `stores/{yourStoreId}/customers/{phone}`
+
+**You need:**
+
+1. Firebase project linked (`flutterfire configure`) so the app banner says **Firebase · real camera**
+2. Firestore created in that project
+3. Rules deployed (includes `invoices` + `customers`):
+   ```powershell
+   cd "C:\Users\aerok\Pasale Register-grok\pasale_register"
+   firebase use YOUR_PROJECT_ID
+   firebase deploy --only firestore:rules
+   ```
+4. App activated with a **Store ID** (store setup screen) — that ID is the Firestore `stores/{storeId}` document
+5. Run the app **without** `USE_FAKES=true` or `REAL_CAMERA_ONLY=true`
+
+**If records only show on device but not Console:** still on fakes/local cache (check banner).  
+**If Console empty after production mode:** check Firestore → `stores` → your store id → `invoices`.  
+**If writes fail:** open Logcat for permission / index errors; deploy rules above. Optional index:
+
+```
+Collection: stores/{storeId}/invoices
+Field: createdAtTs  Descending
+```
+
+(App falls back to unordered fetch if the index is missing.)
+
 
 See **docs/FIRESTORE_SCHEMA.md** for full tables + examples.
 

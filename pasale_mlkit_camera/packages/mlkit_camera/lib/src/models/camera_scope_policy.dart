@@ -39,17 +39,21 @@ class CameraScopePolicy {
   // Presets
   // ---------------------------------------------------------------------------
 
-  /// Free users: barcode + QR scanner only.
+  /// Free users: barcode + QR, plus OCR for price-tag (no barcode) checkout.
+  /// Object detection / batch segmentation remain premium.
   factory CameraScopePolicy.freeDefault({
     String? updatedBy,
     DateTime? updatedAt,
   }) {
     return CameraScopePolicy(
       tier: PlanTier.free,
-      enabled: const {CameraCapability.barcodeQr},
+      enabled: const {
+        CameraCapability.barcodeQr,
+        CameraCapability.textOcr,
+      },
       updatedBy: updatedBy,
       updatedAt: updatedAt ?? DateTime.now().toUtc(),
-      notes: 'Free tier default — barcode & QR',
+      notes: 'Free tier — barcode/QR + price-tag OCR',
     );
   }
 

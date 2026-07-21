@@ -20,22 +20,24 @@ class CartService extends ChangeNotifier {
 
   void addProduct(Product product) {
     _checkoutCompleted = false;
-    final index = _items.indexWhere((item) => item.product.barcode == product.barcode);
+    final index = _items.indexWhere((item) => item.product.id == product.id);
     if (index >= 0) {
-      if (_items[index].quantity < 999) {
+      if (_items[index].quantity < _items[index].product.quantity) {
         _items[index].quantity++;
         notifyListeners();
       }
     } else {
-      _items.add(CartItem(product: product, quantity: 1));
-      notifyListeners();
+      if (product.quantity >= 1 || product.barcode.isEmpty) {
+        _items.add(CartItem(product: product, quantity: 1));
+        notifyListeners();
+      }
     }
   }
 
-  bool incrementQuantity(String barcode) {
-    final index = _items.indexWhere((item) => item.product.barcode == barcode);
+  bool incrementQuantity(String productId) {
+    final index = _items.indexWhere((item) => item.product.id == productId);
     if (index >= 0) {
-      if (_items[index].quantity >= 999) {
+      if (_items[index].quantity >= _items[index].product.quantity && _items[index].product.barcode.isNotEmpty) {
         return false; // Max reached
       }
       _checkoutCompleted = false;
@@ -46,8 +48,8 @@ class CartService extends ChangeNotifier {
     return false;
   }
 
-  void decrementQuantity(String barcode) {
-    final index = _items.indexWhere((item) => item.product.barcode == barcode);
+  void decrementQuantity(String productId) {
+    final index = _items.indexWhere((item) => item.product.id == productId);
     if (index >= 0) {
       _checkoutCompleted = false;
       if (_items[index].quantity > 1) {

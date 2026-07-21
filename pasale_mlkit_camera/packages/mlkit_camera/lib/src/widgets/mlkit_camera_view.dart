@@ -80,12 +80,17 @@ class _MlkitCameraViewState extends State<MlkitCameraView> {
     final err = c.error;
 
     if (err != null && !c.isInitialized) {
+      final isPermission = err.toLowerCase().contains('permission') ||
+          err.toLowerCase().contains('camera access') ||
+          err.toLowerCase().contains('blocked');
       return _messageBox(
         err,
         icon: Icons.videocam_off,
-        actionLabel: err.contains('permission') ? 'Open settings' : null,
-        onAction: err.contains('permission')
-            ? () => c.initialize() // re-request / reopen settings path
+        actionLabel: isPermission ? 'Try again' : 'Retry',
+        onAction: () => unawaited(c.initialize()),
+        secondaryLabel: isPermission ? 'Open settings' : null,
+        onSecondary: isPermission
+            ? () => unawaited(c.openSystemAppSettings())
             : null,
       );
     }
@@ -153,6 +158,8 @@ class _MlkitCameraViewState extends State<MlkitCameraView> {
     IconData icon = Icons.error_outline,
     String? actionLabel,
     VoidCallback? onAction,
+    String? secondaryLabel,
+    VoidCallback? onSecondary,
   }) {
     return ColoredBox(
       color: Colors.black,
@@ -171,9 +178,19 @@ class _MlkitCameraViewState extends State<MlkitCameraView> {
               ),
               if (actionLabel != null && onAction != null) ...[
                 const SizedBox(height: 12),
-                TextButton(
+                FilledButton(
                   onPressed: onAction,
                   child: Text(actionLabel),
+                ),
+              ],
+              if (secondaryLabel != null && onSecondary != null) ...[
+                const SizedBox(height: 8),
+                TextButton(
+                  onPressed: onSecondary,
+                  child: Text(
+                    secondaryLabel,
+                    style: const TextStyle(color: Colors.white70),
+                  ),
                 ),
               ],
             ],

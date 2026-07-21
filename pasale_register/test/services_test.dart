@@ -27,7 +27,7 @@ void main() {
     final firestore = locator<FirestoreService>() as FakeFirestoreService;
 
     // Store Activation
-    await firestore.activateStore('store123', 'My Store');
+    await firestore.activateStore('store123', 'My Store', ownerUid: 'user123');
     expect(firestore.stores['store123'], 'My Store');
 
     // Device registration

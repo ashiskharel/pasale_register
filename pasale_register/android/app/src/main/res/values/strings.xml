@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Pasale Register</string>
+
+    <!--
+      Facebook Login (required for production Facebook auth)
+      1. Create an app at https://developers.facebook.com/
+      2. Add Android platform with package: com.example.pasale_register
+      3. Paste App ID and Client Token below
+      4. Enable Facebook provider in Firebase Console → Authentication
+         with the same App ID + App Secret
+      See docs/AUTH_SETUP.md
+    -->
+    <string name="facebook_app_id">YOUR_FACEBOOK_APP_ID</string>
+    <string name="facebook_client_token">YOUR_FACEBOOK_CLIENT_TOKEN</string>
+    <string name="fb_login_protocol_scheme">fbYOUR_FACEBOOK_APP_ID</string>
+</resources>

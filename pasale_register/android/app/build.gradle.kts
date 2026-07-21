@@ -1,7 +1,7 @@
 plugins {
     id("com.android.application")
-    id("kotlin-android")
-    // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
+    // No kotlin-android: app is Java-only (MainActivity.java). Avoids KGP app warning.
+    // See https://docs.flutter.dev/release/breaking-changes/migrate-to-built-in-kotlin/for-app-developers
     id("dev.flutter.flutter-gradle-plugin")
     id("com.google.gms.google-services")
 }
@@ -17,7 +17,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.pasale_register"
+        applicationId = "com.akai.pasaleko"
         // ML Kit + camera require a modern minSdk.
         minSdk = maxOf(flutter.minSdkVersion, 23)
         targetSdk = flutter.targetSdkVersion
@@ -27,14 +27,16 @@ android {
 
     buildTypes {
         release {
+            // Field-trial: still debug-signed until a release keystore is set.
             signingConfig = signingConfigs.getByName("debug")
+            // Shrink unused resources + R8 code shrink (smaller APK, harder reverse-eng).
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
         }
-    }
-}
-
-kotlin {
-    compilerOptions {
-        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
     }
 }
 

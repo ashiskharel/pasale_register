@@ -1,8 +1,9 @@
 import 'dart:io';
 
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:path_provider/path_provider.dart';
 
-/// Persist a temp camera path into app documents for long-term product photos.
+/// Persist a temp camera path into Cloud Storage for cross-device product photos.
 Future<String?> persistProductImage({
   required String sourcePath,
   required String storeId,
@@ -22,7 +23,21 @@ Future<String?> persistProductImage({
     final safeBarcode = barcode.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_');
     final dest = File('${dir.path}/$safeBarcode.jpg');
     await src.copy(dest.path);
-    return dest.path;
+    
+    try {
+      final storageRef = FirebaseStorage.instance
+          .ref()
+          .child('product_photos')
+          .child(storeId)
+          .child('$safeBarcode.jpg');
+          
+      await storageRef.putFile(dest);
+      final downloadUrl = await storageRef.getDownloadURL();
+      return downloadUrl;
+    } catch (e) {
+      // If upload fails (e.g., offline/no config), fallback to local path
+      return dest.path;
+    }
   } catch (_) {
     return sourcePath;
   }

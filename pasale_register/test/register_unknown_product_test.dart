@@ -1,11 +1,12 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pasale_register/constants/keys.dart';
 import 'package:pasale_register/main.dart';
+import 'package:pasale_register/models/user_role.dart';
 import 'package:pasale_register/services/cart_service.dart';
 import 'package:pasale_register/services/fakes/fake_firestore_service.dart';
 import 'package:pasale_register/services/firestore_service.dart';
 import 'package:pasale_register/services/service_locator.dart';
+import 'package:pasale_register/services/session_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -13,10 +14,14 @@ void main() {
 
   setUp(() async {
     SharedPreferences.setMockInitialValues({
-      'storeId': 's1',
-      'deviceId': 'd1',
-      'isActivated': true,
-      'storeName': 'Test Store',
+      SessionKeys.isLoggedIn: true,
+      SessionKeys.role: UserRole.storeOwner.name,
+      SessionKeys.phone: '9801112233',
+      SessionKeys.trainingDone: true,
+      SessionKeys.storeId: 's1',
+      SessionKeys.deviceId: 'd1',
+      SessionKeys.isActivated: true,
+      SessionKeys.storeName: 'Test Store',
     });
     setupLocator(useFakes: true);
   });
@@ -26,9 +31,8 @@ void main() {
     await tester.pumpWidget(const MyApp());
     await tester.pumpAndSettle();
 
-    // Go to checkout
-    await tester.tap(find.byKey(AppKeys.navToCheckout));
-    await tester.pumpAndSettle();
+    // Store owner shell opens on Scanner (checkout)
+    expect(find.byKey(AppKeys.storeOwnerShell), findsOneWidget);
 
     await tester.enterText(
       find.byKey(AppKeys.productSearchInput),

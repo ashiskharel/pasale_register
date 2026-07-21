@@ -1,12 +1,12 @@
-import 'dart:convert';
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:pasale_register/models/store.dart';
 import 'package:pasale_register/models/device.dart';
 import 'package:pasale_register/services/service_locator.dart';
+import 'package:pasale_register/services/session_service.dart';
 import 'package:pasale_register/constants/keys.dart';
 import 'package:pasale_register/main.dart';
+import 'package:pasale_register/models/user_role.dart';
 
 void main() {
   setUp(() {
@@ -30,7 +30,10 @@ void main() {
       final deserialized = Store.fromMap(map, 'store_123');
       expect(deserialized.storeId, 'store_123');
       expect(deserialized.name, 'Super Pasale');
-      expect(deserialized.activationDate.millisecondsSinceEpoch, now.millisecondsSinceEpoch);
+      expect(
+        deserialized.activationDate.millisecondsSinceEpoch,
+        now.millisecondsSinceEpoch,
+      );
     });
 
     test('Device serialization & deserialization', () {
@@ -52,67 +55,145 @@ void main() {
       expect(deserialized.deviceId, 'device_abc');
       expect(deserialized.model, 'Pixel 6');
       expect(deserialized.osVersion, 'Android 13');
-      expect(deserialized.lastActive.millisecondsSinceEpoch, now.millisecondsSinceEpoch);
+      expect(
+        deserialized.lastActive.millisecondsSinceEpoch,
+        now.millisecondsSinceEpoch,
+      );
     });
   });
 
-  group('SharedPreferences and Activation Screen UI & Navigation Tests', () {
-    testWidgets('Unactivated startup displays Activation screen and blocks other screens', (WidgetTester tester) async {
+  group('App gate flow', () {
+    testWidgets('Cold start shows Landing with role toggle', (tester) async {
       SharedPreferences.setMockInitialValues({});
-      
+
       await tester.pumpWidget(const MyApp());
       await tester.pumpAndSettle();
 
-      expect(find.byKey(AppKeys.storeIdInput), findsOneWidget);
-      expect(find.byKey(AppKeys.storeNameInput), findsOneWidget);
-      expect(find.byKey(AppKeys.activateStoreButton), findsOneWidget);
-
-      expect(find.byKey(AppKeys.navToCatalog), findsOneWidget);
-      expect(find.byKey(AppKeys.navToCheckout), findsOneWidget);
-      expect(find.byKey(AppKeys.navToInvoiceIngestor), findsOneWidget);
-
-      // Verify clicking Catalog does NOT navigate away (blocked since not activated)
-      await tester.tap(find.byKey(AppKeys.navToCatalog));
-      await tester.pumpAndSettle();
-
-      expect(find.byKey(AppKeys.storeIdInput), findsOneWidget);
+      expect(find.byKey(AppKeys.landingScreen), findsOneWidget);
+      expect(find.byKey(AppKeys.roleToggleBar), findsOneWidget);
+      expect(find.text('Continue as Store Owner'), findsOneWidget);
     });
 
-    testWidgets('Activated startup bypasses Activation screen and shows Catalog screen', (WidgetTester tester) async {
+    testWidgets('Logged-in store owner with store open shows shell/scanner',
+        (tester) async {
       SharedPreferences.setMockInitialValues({
-        'storeId': 'store_ok',
-        'deviceId': 'device_ok',
-        'isActivated': true,
+        SessionKeys.isLoggedIn: true,
+        SessionKeys.role: UserRole.storeOwner.name,
+        SessionKeys.phone: '9801112233',
+        SessionKeys.trainingDone: true,
+        SessionKeys.storeId: 'store_ok',
+        SessionKeys.storeName: 'OK Shop',
+        SessionKeys.deviceId: 'device_ok',
+        SessionKeys.isActivated: true,
       });
 
       await tester.pumpWidget(const MyApp());
       await tester.pumpAndSettle();
 
-      expect(find.byKey(AppKeys.storeIdInput), findsNothing);
-      expect(find.byKey(AppKeys.productSearchInput), findsOneWidget);
+      expect(find.byKey(AppKeys.storeOwnerShell), findsOneWidget);
+      expect(find.byKey(AppKeys.profileMenuButton), findsOneWidget);
+      // Scanner / checkout idle UI
+      expect(find.byKey(AppKeys.scanBarcodeButton), findsOneWidget);
     });
 
-    testWidgets('Activation flow successful - saves to SharedPreferences and redirects to Catalog', (WidgetTester tester) async {
+    testWidgets('OTP + store setup activation flow', (tester) async {
       SharedPreferences.setMockInitialValues({});
 
       await tester.pumpWidget(const MyApp());
-      await tester.pumpAndSettle();
+      await tester.pump(); // loading → landing
+      await tester.pump(const Duration(milliseconds: 100));
 
+      // Landing → continue as store owner (scroll if hero video tall)
+      final continueBtn = find.byKey(AppKeys.continueAsRoleButton);
+      await tester.ensureVisible(continueBtn);
+      await tester.tap(continueBtn);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(find.byKey(AppKeys.otpAuthScreen), findsOneWidget);
+
+      // Facebook button is present on auth screen
+      expect(find.byKey(AppKeys.facebookSignInButton), findsOneWidget);
+
+      await tester.enterText(find.byKey(AppKeys.phoneInput), '9801234567');
+      await tester.tap(find.byKey(AppKeys.sendOtpButton));
+      // Avoid pumpAndSettle — progress / async frames
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.byKey(AppKeys.otpInput), findsOneWidget);
+      await tester.enterText(find.byKey(AppKeys.otpInput), '123456');
+      await tester.tap(find.byKey(AppKeys.verifyOtpButton));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      // Training consent
+      expect(find.byKey(AppKeys.trainingScreen), findsOneWidget);
+      await tester.tap(find.byKey(AppKeys.trainingConsentCheckbox));
+      await tester.pump();
+      await tester.tap(find.byKey(AppKeys.skipTrainingButton));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      // Store setup
+      expect(find.byKey(AppKeys.storeIdInput), findsOneWidget);
       await tester.enterText(find.byKey(AppKeys.storeIdInput), 'mystore123');
-      await tester.enterText(find.byKey(AppKeys.storeNameInput), 'My Awesome Store');
-      await tester.enterText(find.byKey(AppKeys.deviceIdInput), 'mydevice123');
-      
+      await tester.enterText(
+        find.byKey(AppKeys.storeNameInput),
+        'My Awesome Store',
+      );
       await tester.tap(find.byKey(AppKeys.activateStoreButton));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 500));
 
       final prefs = await SharedPreferences.getInstance();
-      expect(prefs.getString('storeId'), 'mystore123');
-      expect(prefs.getBool('isActivated'), true);
-      expect(prefs.getString('deviceId'), 'mydevice123');
+      expect(prefs.getString(SessionKeys.storeId), 'mystore123');
+      expect(prefs.getBool(SessionKeys.isActivated), true);
+      expect(prefs.getBool(SessionKeys.isLoggedIn), true);
 
-      expect(find.byKey(AppKeys.productSearchInput), findsOneWidget);
-      expect(find.byKey(AppKeys.storeIdInput), findsNothing);
+      expect(find.byKey(AppKeys.storeOwnerShell), findsOneWidget);
+      // AnimatedSwitcher may briefly keep outgoing page; accept ≥1.
+      expect(find.byKey(AppKeys.scanBarcodeButton), findsWidgets);
+    });
+
+    testWidgets('Vendor role reaches vendor shell after training',
+        (tester) async {
+      SharedPreferences.setMockInitialValues({
+        SessionKeys.isLoggedIn: true,
+        SessionKeys.role: UserRole.vendor.name,
+        SessionKeys.phone: '9801112233',
+        SessionKeys.trainingDone: true,
+      });
+
+      await tester.pumpWidget(const MyApp());
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(AppKeys.vendorShell), findsOneWidget);
+    });
+
+    testWidgets('Facebook demo sign-in reaches training', (tester) async {
+      SharedPreferences.setMockInitialValues({});
+
+      await tester.pumpWidget(const MyApp());
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      final continueBtn = find.byKey(AppKeys.continueAsRoleButton);
+      await tester.ensureVisible(continueBtn);
+      await tester.tap(continueBtn);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(find.byKey(AppKeys.facebookSignInButton), findsOneWidget);
+      await tester.tap(find.byKey(AppKeys.facebookSignInButton));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.byKey(AppKeys.trainingScreen), findsOneWidget);
+
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getBool(SessionKeys.isLoggedIn), true);
+      expect(prefs.getString(SessionKeys.authProvider), 'demoFacebook');
     });
   });
 }

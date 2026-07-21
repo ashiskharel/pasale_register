@@ -2,16 +2,26 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
-import 'firebase_options.dart';
+import 'firebase_options_dev.dart' as dev;
+import 'firebase_options_prod.dart' as prod;
 import 'services/service_locator.dart';
 
 /// Compile-time overrides:
 /// - `--dart-define=USE_FAKES=true` → all fakes (tests)
 /// - `--dart-define=REAL_CAMERA_ONLY=true` → real ML Kit, fake Firestore
-/// - default → try Firebase production; if not configured, real camera only
+/// - `--dart-define=ENV=Prod` (or `prod`) → Firebase **prod** project options
+/// - default `ENV=dev` → Firebase **dev** project options
+///
+/// We have separate Firebase / Firestore projects for dev vs prod — always
+/// pass `ENV=Prod` for real store data / production demos.
 const bool kForceFakes = bool.fromEnvironment('USE_FAKES', defaultValue: false);
 const bool kRealCameraOnly =
     bool.fromEnvironment('REAL_CAMERA_ONLY', defaultValue: false);
+const String kEnvironment = String.fromEnvironment('ENV', defaultValue: 'dev');
+
+/// True when [kEnvironment] is prod (case-insensitive: `prod`, `Prod`, `PROD`).
+bool get kIsProdEnvironment =>
+    kEnvironment.toLowerCase() == 'prod';
 
 class BootstrapResult {
   const BootstrapResult({
@@ -29,6 +39,7 @@ class BootstrapResult {
 Future<BootstrapResult> bootstrap() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  /*
   if (kForceFakes) {
     setupLocator(backend: ServiceBackend.fakes);
     return const BootstrapResult(
@@ -46,40 +57,39 @@ Future<BootstrapResult> bootstrap() async {
       message: 'REAL_CAMERA_ONLY — ML Kit on, Firestore faked',
     );
   }
+  */
 
-  if (!DefaultFirebaseOptions.isConfigured) {
-    debugPrint(
-      'Firebase options not configured. '
-      'Run: dart run flutterfire_cli:flutterfire configure\n'
-      'Falling back to real camera + fake Firestore.',
-    );
-    setupLocator(backend: ServiceBackend.realCamera);
-    return const BootstrapResult(
-      backend: ServiceBackend.realCamera,
-      firebaseReady: false,
-      message:
-          'Firebase not configured — real camera + local fake catalog. '
-          'See FIREBASE_SETUP.md',
-    );
-  }
+  final firebaseOptions = kIsProdEnvironment
+      ? prod.DefaultFirebaseOptions.currentPlatform
+      : dev.DefaultFirebaseOptions.currentPlatform;
 
   try {
     await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
+      options: firebaseOptions,
     );
     setupLocator(backend: ServiceBackend.production);
-    return const BootstrapResult(
+    return BootstrapResult(
       backend: ServiceBackend.production,
       firebaseReady: true,
-      message: 'Firebase + real ML Kit camera ready',
+      message: 'Firebase [$kEnvironment] + real ML Kit camera ready',
     );
   } catch (e, st) {
+    if (e is FirebaseException && e.code == 'duplicate-app') {
+      setupLocator(backend: ServiceBackend.production);
+      return BootstrapResult(
+        backend: ServiceBackend.production,
+        firebaseReady: true,
+        message: 'Firebase [$kEnvironment] already initialized',
+      );
+    }
+    
     debugPrint('Firebase.initializeApp failed: $e\n$st');
-    setupLocator(backend: ServiceBackend.realCamera);
+    // Force production anyway since user requested it
+    setupLocator(backend: ServiceBackend.production);
     return BootstrapResult(
-      backend: ServiceBackend.realCamera,
+      backend: ServiceBackend.production,
       firebaseReady: false,
-      message: 'Firebase init failed ($e) — real camera + fake Firestore',
+      message: 'Firebase init failed ($e) — forcing production backend anyway',
     );
   }
 }

@@ -21,7 +21,9 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  camera: ^0.11.0+2
+  # AGP 9 / Built-in Kotlin: need camera_android_camerax ≥0.7.2+1
+  camera: ^0.12.0
+  camera_android_camerax: ^0.7.2+1
   google_mlkit_commons: ^0.11.0
   google_mlkit_barcode_scanning: ^0.14.1
   google_mlkit_text_recognition: ^0.15.0

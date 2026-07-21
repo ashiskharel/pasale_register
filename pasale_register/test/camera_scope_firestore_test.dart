@@ -19,7 +19,10 @@ void main() {
     await fs.saveCameraScope('store-1', free);
     final loaded = await fs.getCameraScope('store-1');
     expect(loaded.tier, PlanTier.free);
-    expect(loaded.enabled, {CameraCapability.barcodeQr});
+    expect(loaded.enabled, {
+      CameraCapability.barcodeQr,
+      CameraCapability.textOcr,
+    });
 
     final premium = CameraScopePolicy.premiumDefault(updatedBy: 'admin');
     await fs.saveCameraScope('store-1', premium);

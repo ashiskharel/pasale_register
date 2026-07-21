@@ -47,3 +47,21 @@ coverage/
 # Agent runtime noise (keep source docs if needed)
 .agents/**/tmp/
 .agents/**/*.lock
+
+# Ignored project documentation & progress files
+ORIGINAL_REQUEST.md
+PROJECT.md
+TEST_INFRA.md
+progress.md
+
+# Ignore documentation, passwords, and sensitive files
+docs/
+.env
+firebase_options.dart
+*.key
+*.keystore
+*.jks
+key.properties
+secret.json
+firebase.json
+.firebase/

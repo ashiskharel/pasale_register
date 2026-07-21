@@ -6,8 +6,9 @@ import 'package:device_info_plus/device_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 import '../constants/keys.dart';
-import '../services/service_locator.dart';
 import '../services/firestore_service.dart';
+import '../services/service_locator.dart';
+import '../services/session_service.dart';
 
 class ActivationScreen extends StatefulWidget {
   final VoidCallback? onActivated;
@@ -148,7 +149,17 @@ class _ActivationScreenState extends State<ActivationScreen> {
     }
     try {
       setState(() => _status = 'Activating store…');
-      await locator<FirestoreService>().activateStore(storeId, storeName);
+      final session = await SessionService().load();
+      final ownerUid = (session.uid != null && session.uid!.isNotEmpty)
+          ? session.uid!
+          : 'local_owner';
+      await locator<FirestoreService>().activateStore(
+        storeId,
+        storeName,
+        ownerUid: ownerUid,
+        businessId: session.businessId,
+        ownerPhone: session.phone,
+      );
 
       final deviceId = _deviceIdController.text.trim();
       final metadataStr = _deviceMetadataController.text.trim();
@@ -174,6 +185,9 @@ class _ActivationScreenState extends State<ActivationScreen> {
       await prefs.setString('storeName', storeName);
       await prefs.setString('deviceId', deviceId);
       await prefs.setBool('isActivated', true);
+      if (session.businessId != null) {
+        await prefs.setString(SessionKeys.businessId, session.businessId!);
+      }
 
       setState(() {
         _status = 'Store Activated Successfully: $storeName';

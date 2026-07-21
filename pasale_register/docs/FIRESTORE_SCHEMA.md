@@ -4,14 +4,40 @@ Package: `com.example.pasale_register`
 Database: **Cloud Firestore** (default)
 
 ```
-stores/{storeId}
+users/{uid}                         # Firebase Auth user profile
+businesses/{businessId}             # owner company (phone/FB owner)
+  members/{uid}
+  catalog/{productId}               # shared master catalog (phase 3)
+stores/{storeId}                    # substore / branch POS
   devices/{deviceId}
   products/{barcode}
   settings/cameraScope
-  sales/{saleId}          # optional checkout history
+  sales/{saleId}
+  invoices/{invoiceId}
+  customers/{phone}
 
-products/{barcode}        # global seed / legacy fallback
+products/{barcode}                  # global seed / legacy fallback
 ```
+
+### Membership model (phases 1–3)
+
+- **Owner key in rules = Firebase Auth `uid`** (not phone alone).
+- Phone is profile/recovery; Facebook uses same `uid` when accounts are linked.
+- On login: `ensureMembershipProfile` creates `users/{uid}` + default `businesses/biz_{uid}`.
+- On store activate / **Add branch**: store gets `ownerUid`, `memberUids: [uid]`, `businessId`.
+- **Heal**: on home open, `healStoreMembership` claims legacy stores missing membership (fixes catalog/scanner after rules rollout).
+- **Catalog sync**: `businesses/{id}/catalog/{sku}` is master; `stores/{id}/products` holds branch prices (store wins on merge).
+- **Store switcher** in Store Owner app bar lists member stores and can create branches.
+
+---
+
+## 0. `users/{uid}` / `businesses/{businessId}`
+
+| Path | Key fields |
+|------|------------|
+| `users/{uid}` | `uid`, `primaryPhone?`, `displayName?`, `email?`, `businessIds[]`, `defaultStoreId?` |
+| `businesses/{id}` | `businessId`, `ownerUid`, `primaryPhone?`, `name`, `storeIds[]` |
+| `businesses/{id}/members/{uid}` | `role` (`owner`\|`manager`\|`cashier`), `storeIds[]` (`*` = all) |
 
 ---
 
@@ -29,6 +55,11 @@ Written by: **Activation** (`activateStore`)
 | `isActive` | bool | | Default `true` |
 | `planTier` | string | | `free` \| `premium` (optional mirror of camera scope) |
 | `currency` | string | | Default `NPR` |
+| `businessId` | string | ✓ (new) | Parent business / multi-store group |
+| `ownerUid` | string | ✓ (new) | Firebase Auth uid of owner |
+| `memberUids` | list\<string\> | ✓ (new) | Uids allowed to access this store |
+| `catalogMode` | string | | `shared` (default) \| `local` |
+| `ownerPhone` | string | | E.164 when activated via phone login |
 | `phone` | string | | Store contact (optional) |
 | `address` | string | | Optional |
 

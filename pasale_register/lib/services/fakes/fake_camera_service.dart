@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:pasale_register/services/camera_service.dart';
 
 class FakeCameraService implements CameraService {
@@ -27,4 +28,22 @@ class FakeCameraService implements CameraService {
 
   @override
   Future<String?> captureProductPhoto() => captureInvoicePhoto();
+
+  @override
+  Future<void> prepareProductPhotoSession() async {}
+
+  @override
+  Widget? buildProductPhotoPreview() {
+    return Container(
+      color: Colors.black87,
+      alignment: Alignment.center,
+      child: const Text(
+        'Fake camera preview',
+        style: TextStyle(color: Colors.white70, fontSize: 12),
+      ),
+    );
+  }
+
+  @override
+  Stream<String> get productNameStream => const Stream.empty();
 }

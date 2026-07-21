@@ -1,15 +1,21 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:pasale_register/main.dart';
-import 'package:pasale_register/screens/activation_screen.dart';
+import 'package:pasale_register/constants/keys.dart';
+import 'package:pasale_register/services/service_locator.dart';
 
 void main() {
-  testWidgets('App smoke test - starts on ActivationScreen', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
+  setUp(() {
+    setupLocator(useFakes: true);
+    SharedPreferences.setMockInitialValues({});
+  });
+
+  testWidgets('App smoke test - starts on LandingScreen', (tester) async {
     await tester.pumpWidget(const MyApp());
     await tester.pumpAndSettle();
 
-    // Verify ActivationScreen is shown
-    expect(find.byType(ActivationScreen), findsOneWidget);
+    expect(find.byKey(AppKeys.landingScreen), findsOneWidget);
+    expect(find.byKey(AppKeys.roleToggleBar), findsOneWidget);
+    expect(find.byKey(AppKeys.continueAsRoleButton), findsOneWidget);
   });
 }

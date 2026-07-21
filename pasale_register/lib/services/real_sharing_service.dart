@@ -5,7 +5,7 @@ class RealSharingService implements SharingService {
   @override
   Future<void> shareReceipt(String receiptText, String phoneNumber) async {
     try {
-      await Share.share(receiptText);
+      await SharePlus.instance.share(ShareParams(text: receiptText));
     } catch (e) {
       throw Exception('share_failed');
     }

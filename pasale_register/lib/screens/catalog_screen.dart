@@ -1,13 +1,19 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
 import '../constants/keys.dart';
 import '../models/product.dart';
-import '../services/service_locator.dart';
-import '../services/firestore_service.dart';
 import '../services/cart_service.dart';
+import '../services/firestore_service.dart';
+import '../services/service_locator.dart';
+import '../widgets/register_product_dialog.dart';
 
 class CatalogScreen extends StatefulWidget {
-  const CatalogScreen({super.key});
+  const CatalogScreen({super.key, this.embedded = false});
+
+  final bool embedded;
 
   @override
   State<CatalogScreen> createState() => _CatalogScreenState();
@@ -15,261 +21,227 @@ class CatalogScreen extends StatefulWidget {
 
 class _CatalogScreenState extends State<CatalogScreen> {
   final _searchController = TextEditingController();
-  final _nameController = TextEditingController();
-  final _barcodeController = TextEditingController();
-  final _sellingPriceController = TextEditingController();
-  final _costPriceController = TextEditingController();
-  final _markupController = TextEditingController();
-
   String _status = '';
-  bool _showAddForm = false;
+  String? _storeId;
+  String? _businessId;
+  bool _storeReady = false;
 
-  void _saveProduct() async {
-    final name = _nameController.text.trim();
-    final barcode = _barcodeController.text.trim();
-    final sellingPriceStr = _sellingPriceController.text.trim();
-    final costPriceStr = _costPriceController.text.trim();
-    final markupStr = _markupController.text.trim();
+  @override
+  void initState() {
+    super.initState();
+    _loadStoreId();
+  }
 
-    if (name.isEmpty || barcode.isEmpty) {
-      setState(() {
-        _status = 'Error: Name and Barcode required';
-      });
-      return;
-    }
-
-    double? sellingPrice;
-    double? costPrice;
-    double? markup;
-
-    if (sellingPriceStr.isNotEmpty) {
-      sellingPrice = double.tryParse(sellingPriceStr);
-      if (sellingPrice == null) {
-        setState(() => _status = 'Error: Prices and markup must be valid numbers');
-        return;
-      }
-    } else {
-      sellingPrice = 0.0;
-    }
-
-    if (costPriceStr.isNotEmpty) {
-      costPrice = double.tryParse(costPriceStr);
-      if (costPrice == null) {
-        setState(() => _status = 'Error: Prices and markup must be valid numbers');
-        return;
-      }
-    } else {
-      costPrice = 0.0;
-    }
-
-    if (markupStr.isNotEmpty) {
-      markup = double.tryParse(markupStr);
-      if (markup == null) {
-        setState(() => _status = 'Error: Prices and markup must be valid numbers');
-        return;
-      }
-    } else {
-      markup = 0.0;
-    }
-
-    if (sellingPrice < 0.0 || costPrice < 0.0 || markup < 0.0) {
-      setState(() {
-        _status = 'Error: Prices and markup must be non-negative';
-      });
-      return;
-    }
-
-    if (sellingPrice < costPrice) {
-      setState(() {
-        _status = 'Error: Selling price cannot be less than cost price';
-      });
-      return;
-    }
-
+  Future<void> _loadStoreId() async {
     final prefs = await SharedPreferences.getInstance();
-    final storeId = prefs.getString('storeId');
+    if (!mounted) return;
+    setState(() {
+      _storeId = prefs.getString('storeId');
+      _businessId = prefs.getString('businessId');
+      _storeReady = true;
+    });
+  }
 
-    final product = Product(
-      id: barcode, // using barcode as id
-      name: name,
-      barcode: barcode,
-      sellingPrice: sellingPrice,
-      costPrice: costPrice,
-      markup: markup,
-      storeId: storeId,
+  Future<void> _openAddProduct() async {
+    final product = await showRegisterProductDialog(
+      context: context,
+      kind: RegisterProductKind.catalog,
+      storeId: _storeId,
+      businessId: _businessId,
     );
+    if (!mounted) return;
+    if (product != null) {
+      setState(() => _status = 'Product Saved: ${product.name}');
+    }
+  }
 
-    try {
-      await locator<FirestoreService>().saveProduct(product, storeId: storeId);
-      setState(() {
-        _status = 'Product Saved: $name';
-        _showAddForm = false;
-        _nameController.clear();
-        _barcodeController.clear();
-        _sellingPriceController.clear();
-        _costPriceController.clear();
-        _markupController.clear();
-      });
-    } catch (e) {
-      setState(() {
-        _status = 'Error: $e';
-      });
+  Future<void> _openEditProduct(Product product) async {
+    final updated = await showRegisterProductDialog(
+      context: context,
+      kind: RegisterProductKind.edit,
+      storeId: _storeId ?? product.storeId,
+      businessId: _businessId,
+      existingProduct: product,
+    );
+    if (!mounted) return;
+    if (updated != null) {
+      setState(() => _status = 'Product updated: ${updated.name}');
     }
   }
 
   @override
   void dispose() {
     _searchController.dispose();
-    _nameController.dispose();
-    _barcodeController.dispose();
-    _sellingPriceController.dispose();
-    _costPriceController.dispose();
-    _markupController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Product Catalog')),
-      body: Column(
-        children: [
+    final scheme = Theme.of(context).colorScheme;
+    final body = Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+          child: TextField(
+            key: AppKeys.productSearchInput,
+            controller: _searchController,
+            decoration: const InputDecoration(
+              labelText: 'Search products',
+              hintText: 'Name or barcode',
+              prefixIcon: Icon(Icons.search_rounded),
+            ),
+            onChanged: (_) => setState(() {}),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: SizedBox(
+            width: double.infinity,
+            child: FilledButton.tonalIcon(
+              key: AppKeys.addProductButton,
+              onPressed: _openAddProduct,
+              icon: const Icon(Icons.add_rounded),
+              label: const Text('Add product'),
+            ),
+          ),
+        ),
+        if (_status.isNotEmpty)
           Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: TextField(
-              key: AppKeys.productSearchInput,
-              controller: _searchController,
-              decoration: const InputDecoration(
-                labelText: 'Search Products',
-                prefixIcon: Icon(Icons.search),
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+            child: Text(
+              _status,
+              key: AppKeys.statusText,
+              style: TextStyle(
+                color: scheme.primary,
+                fontWeight: FontWeight.w600,
               ),
-              onChanged: (val) {
-                setState(() {});
-              },
             ),
           ),
-          ElevatedButton(
-            key: AppKeys.addProductButton,
-            onPressed: () {
-              setState(() {
-                _showAddForm = !_showAddForm;
-              });
-            },
-            child: Text(_showAddForm ? 'Hide Form' : 'Add Product Manually'),
-          ),
-          if (_showAddForm) ...[
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: Column(
-                children: [
-                  TextField(
-                    key: AppKeys.productNameInput,
-                    controller: _nameController,
-                    decoration: const InputDecoration(labelText: 'Product Name'),
+        Expanded(
+          child: !_storeReady
+              ? const Center(child: CircularProgressIndicator())
+              : StreamBuilder<List<Product>>(
+                  stream: locator<FirestoreService>().streamCatalog(
+                    storeId: _storeId,
+                    businessId: _businessId,
                   ),
-                  TextField(
-                    key: AppKeys.productBarcodeInput,
-                    controller: _barcodeController,
-                    decoration: const InputDecoration(labelText: 'Barcode'),
-                  ),
-                  TextField(
-                    key: AppKeys.productSellingPriceInput,
-                    controller: _sellingPriceController,
-                    decoration: const InputDecoration(labelText: 'Selling Price'),
-                    keyboardType: TextInputType.number,
-                  ),
-                  TextField(
-                    key: AppKeys.productCostPriceInput,
-                    controller: _costPriceController,
-                    decoration: const InputDecoration(labelText: 'Cost Price'),
-                    keyboardType: TextInputType.number,
-                  ),
-                  TextField(
-                    key: AppKeys.productMarkupInput,
-                    controller: _markupController,
-                    decoration: const InputDecoration(labelText: 'Markup %'),
-                    keyboardType: TextInputType.number,
-                  ),
-                  ElevatedButton(
-                    key: AppKeys.saveProductButton,
-                    onPressed: _saveProduct,
-                    child: const Text('Save Product'),
-                  ),
-                ],
-              ),
-            ),
-          ],
-          if (_status.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Text(
-                _status,
-                key: AppKeys.statusText,
-                style: const TextStyle(color: Colors.blue),
-              ),
-            ),
-          Expanded(
-            child: FutureBuilder<String?>(
-              future: SharedPreferences.getInstance()
-                  .then((p) => p.getString('storeId')),
-              builder: (context, storeSnap) {
-                final storeId = storeSnap.data;
-                return StreamBuilder<List<Product>>(
-              stream: locator<FirestoreService>().streamCatalog(storeId: storeId),
-              builder: (context, snapshot) {
-                if (snapshot.hasError) {
-                  return Center(child: Text('Error: ${snapshot.error}'));
-                }
-                if (!snapshot.hasData) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                final query = _searchController.text.toLowerCase().trim();
-                final products = snapshot.data!.where((p) {
-                  return p.name.toLowerCase().contains(query) ||
-                      p.barcode.toLowerCase().contains(query);
-                }).toList();
+                  builder: (context, snapshot) {
+                    if (snapshot.hasError) {
+                      return Center(child: Text('Error: ${snapshot.error}'));
+                    }
+                    if (!snapshot.hasData) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    final query = _searchController.text.toLowerCase().trim();
+                    var products = snapshot.data!;
+                    
+                    if (query.isNotEmpty) {
+                      products = products.where((p) {
+                        return p.name.toLowerCase().contains(query) ||
+                            p.barcode.toLowerCase().contains(query);
+                      }).take(50).toList();
+                    } else {
+                      // Show up to 20 most recently added products by default
+                      products = products.reversed.take(20).toList();
+                    }
 
-                return ListView.builder(
-                  itemCount: products.length,
-                  itemBuilder: (context, index) {
-                    final product = products[index];
-                    return ListTile(
-                      key: ValueKey('catalog_item_${product.barcode}'),
-                      title: Text(product.name),
-                      subtitle: Text(
-                        'Barcode: ${product.barcode}'
-                        '${product.storeId != null ? ' · store' : ''}',
-                      ),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text('Rs. ${product.sellingPrice}'),
-                          const SizedBox(width: 8),
-                          IconButton(
-                            key: ValueKey('add_to_cart_${product.barcode}'),
-                            icon: const Icon(
-                              Icons.add_shopping_cart,
-                              color: Colors.blue,
+                    if (products.isEmpty) {
+                      return Center(
+                        child: Text(
+                          query.isEmpty
+                              ? 'No products yet.\nAdd one or scan at checkout.'
+                              : 'No matches for “$query”',
+                          textAlign: TextAlign.center,
+                          style:
+                              Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                    color: scheme.onSurfaceVariant,
+                                  ),
+                        ),
+                      );
+                    }
+
+                    return ListView.separated(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                      itemCount: products.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 8),
+                      itemBuilder: (context, index) {
+                        final product = products[index];
+                        return Card(
+                          child: ListTile(
+                            key: ValueKey('catalog_item_${product.barcode}'),
+                            onTap: () => _openEditProduct(product),
+                            leading: Container(
+                              width: 48,
+                              height: 48,
+                              decoration: BoxDecoration(
+                                color: scheme.primaryContainer,
+                                shape: BoxShape.circle,
+                                image: product.imagePath != null && product.imagePath!.isNotEmpty
+                                    ? DecorationImage(
+                                        image: (product.imagePath!.startsWith('http') 
+                                            ? NetworkImage(product.imagePath!) 
+                                            : FileImage(File(product.imagePath!))) as ImageProvider,
+                                        fit: BoxFit.cover,
+                                      )
+                                    : null,
+                              ),
+                              child: product.imagePath == null || product.imagePath!.isEmpty
+                                  ? Icon(
+                                      Icons.inventory_2_outlined,
+                                      color: scheme.onPrimaryContainer,
+                                      size: 20,
+                                    )
+                                  : null,
                             ),
-                            onPressed: () {
-                              locator<CartService>().addProduct(product);
-                              setState(() {
-                                _status = 'Added ${product.name} to cart';
-                              });
-                            },
+                            title: Text(product.name),
+                            subtitle: Text(
+                              '${product.barcode}'
+                              '${product.storeId != null ? ' · store' : ''}'
+                              ' · tap to edit',
+                            ),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  'Rs. ${product.sellingPrice.toStringAsFixed(0)}',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w800,
+                                    color: scheme.primary,
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                IconButton.filledTonal(
+                                  key: ValueKey(
+                                    'add_to_cart_${product.barcode}',
+                                  ),
+                                  tooltip: 'Add to cart',
+                                  icon: const Icon(
+                                    Icons.add_shopping_cart_rounded,
+                                    size: 18,
+                                  ),
+                                  onPressed: () {
+                                    locator<CartService>().addProduct(product);
+                                    setState(() {
+                                      _status =
+                                          'Added ${product.name} to cart';
+                                    });
+                                  },
+                                ),
+                              ],
+                            ),
                           ),
-                        ],
-                      ),
+                        );
+                      },
                     );
                   },
-                );
-              },
-                );
-              },
-            ),
-          ),
-        ],
-      ),
+                ),
+        ),
+      ],
+    );
+    if (widget.embedded) return body;
+    return Scaffold(
+      appBar: AppBar(title: const Text('Product Catalog')),
+      body: body,
     );
   }
 }

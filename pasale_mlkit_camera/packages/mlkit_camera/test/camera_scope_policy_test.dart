@@ -3,11 +3,15 @@ import 'package:mlkit_camera/mlkit_camera.dart';
 
 void main() {
   group('CameraScopePolicy', () {
-    test('free default is barcode & QR only', () {
+    test('free default is barcode/QR + text OCR', () {
       final p = CameraScopePolicy.freeDefault();
       expect(p.tier, PlanTier.free);
-      expect(p.enabled, {CameraCapability.barcodeQr});
+      expect(p.enabled, {
+        CameraCapability.barcodeQr,
+        CameraCapability.textOcr,
+      });
       expect(p.allowsMode(CameraVisionMode.barcodeQr), isTrue);
+      expect(p.allowsMode(CameraVisionMode.text), isTrue);
       expect(p.allowsMode(CameraVisionMode.objectDetection), isFalse);
       expect(p.allowsMode(CameraVisionMode.batchCheckout), isFalse);
       expect(p.defaultMode, CameraVisionMode.barcodeQr);
@@ -38,9 +42,14 @@ void main() {
       expect(p.updatedBy, 'admin');
     });
 
-    test('cannot disable last capability — keeps barcodeQr', () {
+    test('cannot disable last capability — falls back to barcodeQr', () {
       var p = CameraScopePolicy.freeDefault();
       p = p.withCapability(CameraCapability.barcodeQr, enabled: false);
+      // textOcr still remains
+      expect(p.allows(CameraCapability.barcodeQr), isFalse);
+      expect(p.allows(CameraCapability.textOcr), isTrue);
+      p = p.withCapability(CameraCapability.textOcr, enabled: false);
+      // Empty set is replaced with barcodeQr
       expect(p.allows(CameraCapability.barcodeQr), isTrue);
     });
 
@@ -54,7 +63,10 @@ void main() {
 
     test('withTier reset applies presets', () {
       final free = CameraScopePolicy.premiumDefault().withTier(PlanTier.free);
-      expect(free.enabled, {CameraCapability.barcodeQr});
+      expect(free.enabled, {
+        CameraCapability.barcodeQr,
+        CameraCapability.textOcr,
+      });
       final prem = free.withTier(PlanTier.premium);
       expect(prem.allows(CameraCapability.batchSegmentation), isTrue);
     });

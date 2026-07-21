@@ -1,26 +1,51 @@
 {
   "project_info": {
-    "project_number": "000000000000",
-    "project_id": "pasale-register-placeholder",
-    "storage_bucket": "pasale-register-placeholder.appspot.com"
+    "project_number": "149008175042",
+    "project_id": "pasaleko-pos-prod",
+    "storage_bucket": "pasaleko-pos-prod.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:000000000000:android:0000000000000000000000",
+        "mobilesdk_app_id": "1:149008175042:android:c4fd3218add2607387505b",
         "android_client_info": {
-          "package_name": "com.example.pasale_register"
+          "package_name": "com.akai.pasaleko"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "149008175042-q1hni7j7n6pnicc7sb128oovc4ua2c30.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.akai.pasaleko",
+            "certificate_hash": "cacfb5ac617116b37470cee67da1559dc668da69"
+          }
+        },
+        {
+          "client_id": "149008175042-jcfpriq60agbjt3he686b2ine2qdno0i.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
-          "current_key": "AIzaSyPlaceholderReplaceWithRealKey000000"
+          "current_key": "AIzaSyDYfthXMBNJQtq_MJpLmJ0iyxbWcmw-xxo"
         }
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "149008175042-jcfpriq60agbjt3he686b2ine2qdno0i.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "149008175042-4rvpr9ihc486b3a9bletq24j9r8pm74f.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.akai.pasaleko"
+              }
+            }
+          ]
         }
       }
     }
