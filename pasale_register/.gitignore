@@ -43,3 +43,15 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Ignore documentation, passwords, and sensitive files
+docs/
+.env
+firebase_options.dart
+*.key
+*.keystore
+*.jks
+key.properties
+secret.json
+firebase.json
+.firebase/

@@ -1,17 +1,16 @@
-# pasale_register
+# Pasale Register
 
-A new Flutter project.
+Pasale Register is a comprehensive mobile point-of-sale system for small retail businesses, featuring camera-based barcode scanning, offline mode, vendor invoice OCR, and multi-store support.
 
-## Getting Started
+## Tutorial
 
-This project is a starting point for a Flutter application.
+Check out our video tutorial:
+[Pasale Tutorial (Click to Download/Play)](tutorial.mp4)
 
-A few resources to get you started if this is your first Flutter project:
+## Features
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+- **Product Catalog & Barcode Scanning**: Scan products using ML Kit with local device processing.
+- **Multi-Store Access**: Manage multiple retail branches securely with passcode joins.
+- **Device Sharing & Approvals**: Approve cashiers and share register access securely.
+- **Vendor Invoice OCR**: Automatically ingest vendor invoices to populate inventory and prices.
+- **Offline Mode & Synchronization**: Never miss a sale. Caches transactions and auto-syncs when online.
