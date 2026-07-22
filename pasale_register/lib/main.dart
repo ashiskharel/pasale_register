@@ -40,7 +40,7 @@ class MyApp extends StatelessWidget {
       builder: (context, _) {
         final localeCtrl = LocaleController.instance;
         return MaterialApp(
-          title: 'Pasale Register',
+          title: 'PasaleKo',
           debugShowCheckedModeBanner: false,
           theme: PasaleTheme.light(),
           locale: localeCtrl.locale,

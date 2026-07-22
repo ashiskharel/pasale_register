@@ -275,6 +275,18 @@ class SessionService {
     }
   }
 
+  Future<void> markStoreActivated({
+    required String deviceId,
+    Map<String, dynamic>? metadata,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(SessionKeys.isActivated, true);
+    await prefs.setString(SessionKeys.deviceId, deviceId);
+    if (metadata != null) {
+      await prefs.setString(SessionKeys.deviceMetadata, jsonEncode(metadata));
+    }
+  }
+
   Future<void> setPhotoUrl(String? url) async {
     final prefs = await SharedPreferences.getInstance();
     if (url == null || url.isEmpty) {

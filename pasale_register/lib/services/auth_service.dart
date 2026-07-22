@@ -91,6 +91,22 @@ class AuthService {
           storeId: profile.defaultStoreId!,
           businessId: profile.businessId,
         );
+
+        final capture = lastCapture ?? await _device.captureAllSilently();
+        await _session.markStoreActivated(
+          deviceId: capture.deviceId,
+          metadata: capture.metadata,
+        );
+
+        try {
+          await locator<FirestoreService>().registerDevice(
+            profile.defaultStoreId!,
+            capture.deviceId,
+            capture.metadata,
+          );
+        } catch (e) {
+          debugPrint('registerDevice on relogin: $e');
+        }
       }
     } catch (e) {
       debugPrint('ensureMembershipProfile: $e');
