@@ -25,7 +25,7 @@ class AppStrings {
   }
 
   static const _en = <String, String>{
-    'appName': 'Pasale',
+    'appName': 'PasaleKo',
     'tagline': 'Sell faster.\nStock smarter.',
     'taglineSub': 'Register for shops, vendors & buyers.',
     'iAmA': 'I am a…',
@@ -140,7 +140,7 @@ class AppStrings {
   };
 
   static const _ne = <String, String>{
-    'appName': 'पसले',
+    'appName': 'पसलेको',
     'tagline': 'छिटो बेच्नुहोस्।\nस्मार्ट स्टक।',
     'taglineSub': 'पसल, विक्रेता र खरिदकर्ताका लागि रजिस्टर।',
     'iAmA': 'म हुँ…',
@@ -255,7 +255,7 @@ class AppStrings {
   };
 
   static const _bn = <String, String>{
-    'appName': 'পসালে',
+    'appName': 'পসালেকো',
     'tagline': 'দ্রুত বিক্রি।\nস্মার্ট স্টক।',
     'taglineSub': 'দোকান, বিক্রেতা ও ক্রেতার জন্য রেজিস্টার।',
     'iAmA': 'আমি…',
@@ -370,7 +370,7 @@ class AppStrings {
   };
 
   static const _hi = <String, String>{
-    'appName': 'पसले',
+    'appName': 'पसलेको',
     'tagline': 'तेज़ी से बेचें।\nस्मार्ट स्टॉक।',
     'taglineSub': 'दुकान, विक्रेता और खरीदार के लिए रजिस्टर।',
     'iAmA': 'मैं हूँ…',
@@ -485,7 +485,7 @@ class AppStrings {
   };
 
   static const _ur = <String, String>{
-    'appName': 'پسالے',
+    'appName': 'پسالےکو',
     'tagline': 'تیزی سے بیچیں۔\nسمارٹ اسٹاک۔',
     'taglineSub': 'دکان، فروشندہ اور خریدار کے لیے رجسٹر۔',
     'iAmA': 'میں ہوں…',
